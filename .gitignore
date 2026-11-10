@@ -1,0 +1,17 @@
+# Credentials: only the blank reference template belongs in Git.
+.env
+.env.*
+!.env.example
+.venv/
+.tools/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+node_modules/
+dist/
+playwright-report/
+test-results/
+*.tsbuildinfo
+*.log
+

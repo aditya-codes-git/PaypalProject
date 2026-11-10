@@ -1,0 +1,56 @@
+import { useEffect, useState } from 'react';
+import type { Scenario } from './types';
+
+type Props = { scenario: Scenario; onApply: (scenario: Scenario) => void; disabled: boolean };
+const identifier = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 12)}`;
+const numeric = (value: string) => value === '' ? Number.NaN : Number(value);
+const display = (value: number) => Number.isFinite(value) ? value : '';
+
+export function InputEditor({ scenario, onApply, disabled }: Props) {
+  const [draft, setDraft] = useState<Scenario>(() => structuredClone(scenario));
+  const [error, setError] = useState('');
+  const [applied, setApplied] = useState(false);
+  useEffect(() => { setDraft(structuredClone(scenario)); setError(''); setApplied(false); }, [scenario]);
+  function edit(change: Partial<Scenario>) { setDraft(current => ({ ...current, ...change })); setError(''); setApplied(false); }
+  function removeNeed(id: string) {
+    if (draft.offers.some(offer => offer.need_id === id) && !window.confirm('Remove this supply type and its associated offers from the draft?')) return;
+    edit({ needs: draft.needs.filter(need => need.id !== id), offers: draft.offers.filter(offer => offer.need_id !== id) });
+  }
+  function apply() {
+    const normalized: Scenario = {
+      ...draft,
+      needs: draft.needs.map(need => ({ ...need, name: need.name.trim(), category: need.category.trim() })),
+      offers: draft.offers.map(offer => ({ ...offer, supplier: offer.supplier.trim() })),
+      funds: draft.funds.map(fund => ({ ...fund, name: fund.name.trim(), categories: [...new Set(fund.categories.map(category => category.trim()).filter(Boolean))] })),
+    };
+    const integerIn = (value: number, min: number, max: number) => Number.isInteger(value) && value >= min && value <= max;
+    if (!integerIn(normalized.target_kits, 1, 100) || !integerIn(normalized.deadline_days, 0, 30)) {
+      setError('Set a household target from 1 to 100 and a delivery window from 0 to 30 whole days.'); return;
+    }
+    if (!normalized.needs.length || !normalized.offers.length || !normalized.funds.length) {
+      setError('Keep at least one supply type, supplier offer, and funding pool.'); return;
+    }
+    if (normalized.needs.some(need => !need.name || !need.category || !integerIn(need.quantity, 1, 500))) {
+      setError('Every supply needs a name, category, and whole quantity from 1 to 500 per household.'); return;
+    }
+    const needs = new Set(normalized.needs.map(need => need.id));
+    if (normalized.offers.some(offer => !offer.supplier || !needs.has(offer.need_id) || !integerIn(offer.unit_cost_cents, 1, 1_000_000) || !integerIn(offer.stock, 0, 500) || !integerIn(offer.delivery_days, 0, 365))) {
+      setError('Every offer needs a supplier, an existing supply type, an all-in price from $0.01 to $10,000, whole stock from 0 to 500, and delivery from 0 to 365 days.'); return;
+    }
+    if (normalized.funds.some(fund => !fund.name || !integerIn(fund.available_cents, 0, 100_000_000) || !fund.categories.length || fund.categories.length > 10 || fund.categories.some(category => category.length > 40))) {
+      setError('Every pool needs a name, an allocation from $0 to $1,000,000, and one to ten eligible categories of at most 40 characters each.'); return;
+    }
+    setError(''); onApply(normalized); setApplied(true);
+  }
+  return <form className="operation-inputs" onSubmit={event => { event.preventDefault(); apply(); }}>
+    <section className="card input-section"><div className="card-heading"><div><h2>Operation inputs</h2><p>Define the needs, reported offers and confirmed funding for your operation.</p></div><span className="tag">USD only</span></div><p className="input-guidance">Edits stay in this form until you apply them. Then save the operation and generate a fresh plan. Existing reserved or spent allocations remain protected.</p><fieldset disabled={disabled} className="input-grid input-global"><legend className="sr-only">Operation target</legend><label>Households to supply<input type="number" min="1" max="100" step="1" required value={display(draft.target_kits)} onChange={event => edit({ target_kits: numeric(event.target.value) })} /></label><label>Delivery window (days)<input type="number" min="0" max="30" step="1" required value={display(draft.deadline_days)} onChange={event => edit({ deadline_days: numeric(event.target.value) })} /></label></fieldset></section>
+
+    <section className="card input-section"><div className="card-heading"><div><h2>Supply requirements</h2><p>One kit contains the quantities below for one household.</p></div><button type="button" className="button subtle" disabled={disabled || draft.needs.length >= 6} onClick={() => edit({ needs: [...draft.needs, { id: identifier('need'), name: '', category: '', quantity: 1 }] })}>Add supply</button></div>{draft.needs.map((need, index) => <fieldset key={need.id} disabled={disabled} className="input-record"><legend>Supply {index + 1}</legend><div className="input-grid"><label>Supply name<input required maxLength={100} value={need.name} onChange={event => edit({ needs: draft.needs.map(item => item.id === need.id ? { ...item, name: event.target.value } : item) })} /></label><label>Category<input required maxLength={40} placeholder="food, shelter, hygiene…" value={need.category} onChange={event => edit({ needs: draft.needs.map(item => item.id === need.id ? { ...item, category: event.target.value } : item) })} /></label><label>Units per household<input type="number" min="1" max="500" step="1" required value={display(need.quantity)} onChange={event => edit({ needs: draft.needs.map(item => item.id === need.id ? { ...item, quantity: numeric(event.target.value) } : item) })} /></label></div><button type="button" className="text-button input-remove" disabled={draft.needs.length <= 1} onClick={() => removeNeed(need.id)}>Remove supply</button></fieldset>)}</section>
+
+    <section className="card input-section"><div className="card-heading"><div><h2>Supplier offers</h2><p>Enter reported stock, delivery and the complete payable unit price.</p></div><button type="button" className="button subtle" disabled={disabled || draft.offers.length >= 24 || !draft.needs.length} onClick={() => edit({ offers: [...draft.offers, { id: identifier('offer'), supplier: '', need_id: draft.needs[0].id, unit_cost_cents: 100, stock: 0, delivery_days: 1, active: true }] })}>Add offer</button></div>{draft.offers.map((offer, index) => <fieldset key={offer.id} disabled={disabled} className="input-record"><legend>Offer {index + 1}</legend><div className="input-grid"><label>Supplier name<input required maxLength={100} value={offer.supplier} onChange={event => edit({ offers: draft.offers.map(item => item.id === offer.id ? { ...item, supplier: event.target.value } : item) })} /></label><label>Supply type<select value={offer.need_id} onChange={event => edit({ offers: draft.offers.map(item => item.id === offer.id ? { ...item, need_id: event.target.value } : item) })}>{draft.needs.map(need => <option key={need.id} value={need.id}>{need.name || 'Unnamed supply'}</option>)}</select></label><label>All-in unit price (USD)<input type="number" required min="0.01" max="10000" step="0.01" value={display(offer.unit_cost_cents / 100)} onChange={event => edit({ offers: draft.offers.map(item => item.id === offer.id ? { ...item, unit_cost_cents: Math.round(numeric(event.target.value) * 100) } : item) })} /></label><label>Reported stock<input type="number" required min="0" max="500" step="1" value={display(offer.stock)} onChange={event => edit({ offers: draft.offers.map(item => item.id === offer.id ? { ...item, stock: numeric(event.target.value) } : item) })} /></label><label>Delivery (days)<input type="number" required min="0" max="365" step="1" value={display(offer.delivery_days)} onChange={event => edit({ offers: draft.offers.map(item => item.id === offer.id ? { ...item, delivery_days: numeric(event.target.value) } : item) })} /></label></div><div className="action-row"><label className="check-label"><input type="checkbox" checked={offer.active} onChange={event => edit({ offers: draft.offers.map(item => item.id === offer.id ? { ...item, active: event.target.checked } : item) })} />Offer available</label><button type="button" className="text-button input-remove" disabled={draft.offers.length <= 1} onClick={() => edit({ offers: draft.offers.filter(item => item.id !== offer.id) })}>Remove offer</button></div></fieldset>)}<p className="input-guidance">Include tax and shipping in the unit price. If the total is unknown, leave the offer unavailable until it is confirmed. Stock and delivery remain reported estimates.</p></section>
+
+    <section className="card input-section"><div className="card-heading"><div><h2>Funding pools</h2><p>Only confirmed category rules can support a purchasing plan.</p></div><button type="button" className="button subtle" disabled={disabled || draft.funds.length >= 6} onClick={() => edit({ funds: [...draft.funds, { id: identifier('fund'), name: '', available_cents: 0, categories: [draft.needs[0]?.category ?? ''], confirmed: false }] })}>Add funding pool</button></div><p className="input-guidance">Operation categories: {[...new Set(draft.needs.map(need => need.category).filter(Boolean))].join(', ') || 'add a supply category first'}. Enter eligible categories separated by commas. After commitments exist, use the recorded funding adjustment control to change the authoritative opening allocation.</p>{draft.funds.map((fund, index) => <fieldset key={fund.id} disabled={disabled} className="input-record"><legend>Pool {index + 1}</legend><div className="input-grid"><label>Pool name<input required maxLength={100} value={fund.name} onChange={event => edit({ funds: draft.funds.map(item => item.id === fund.id ? { ...item, name: event.target.value } : item) })} /></label><label>Draft allocation (USD)<input type="number" required min="0" max="1000000" step="0.01" value={display(fund.available_cents / 100)} onChange={event => edit({ funds: draft.funds.map(item => item.id === fund.id ? { ...item, available_cents: Math.round(numeric(event.target.value) * 100) } : item) })} /></label><label>Eligible categories<input required value={fund.categories.join(',')} onChange={event => edit({ funds: draft.funds.map(item => item.id === fund.id ? { ...item, categories: event.target.value.split(',') } : item) })} /></label></div><div className="action-row"><label className="check-label"><input type="checkbox" checked={fund.confirmed} onChange={event => edit({ funds: draft.funds.map(item => item.id === fund.id ? { ...item, confirmed: event.target.checked } : item) })} />I confirmed these funding restrictions</label><button type="button" className="text-button input-remove" disabled={draft.funds.length <= 1} onClick={() => edit({ funds: draft.funds.filter(item => item.id !== fund.id) })}>Remove pool</button></div></fieldset>)}</section>
+
+    <div className="card input-submit">{error && <p className="error-banner" role="alert">{error}</p>}{applied && <p role="status">Inputs applied to your workspace. Save the operation to keep these changes.</p>}<button type="submit" className="button primary" disabled={disabled}>Apply operation inputs</button><p>Applying inputs does not approve purchases or move money.</p></div>
+  </form>;
+}

@@ -2,7 +2,7 @@
 
 **Version:** 0.1 — proposed product baseline  
 **Date:** November 10, 2026  
-**Status:** Ready for scope and architecture review; implementation has not started  
+**Status:** Product target; planning, evidence, approval and sandbox execution implemented. See README.md for measured results and remaining live verification.  
 **Budget:** $0 out of pocket for development, testing, and the hackathon demo  
 **Working name:** ReliefOps
 

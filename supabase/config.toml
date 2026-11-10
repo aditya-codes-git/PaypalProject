@@ -1,0 +1,5 @@
+project_id = "reliefops"
+
+[functions.finance-gateway]
+# This gateway uses its own 256-bit server credential, verified inside Postgres.
+verify_jwt = false
