@@ -22,6 +22,9 @@ export async function cloudRequest<T>(account: Account, path: string, method = '
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const result = await response.json().catch(() => null);
+  if (response.status === 422 && Array.isArray(result?.detail)) {
+    throw new Error('Some inputs were rejected. Review the form and try again.');
+  }
   if (!response.ok) throw new Error(typeof result?.detail === 'string' ? result.detail : 'The saved workspace could not be reached. Your edits have not been discarded.');
   return result as T;
 }

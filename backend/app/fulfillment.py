@@ -20,7 +20,7 @@ class SupplierConfirmation(Record):
 
 
 class Receipt(Record):
-    request_id: UUID
+    request_id: UUID = Field(strict=False)
     reference: Reference
     location: Reference
     accepted_units: int = Field(ge=0, le=500)

@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 from app import finance, payments, documents, fulfillment
+from app.cloud import authenticated
 from app.models import PlanningRequest
 from app.planner import solve
 
@@ -104,7 +105,7 @@ def approved(w):
     return finance.read(w.id, w.owner)["state"]["purchases"][0]
 
 
-def test_closed_short_delivery_replans_only_missing_units_and_preserves_finances(workspace):
+def test_closed_short_delivery_replans_only_missing_units_and_preserves_finances(workspace, monkeypatch):
     w = workspace
     purchase = approved(w)
     purchase_id = purchase["id"]
@@ -118,8 +119,12 @@ def test_closed_short_delivery_replans_only_missing_units_and_preserves_finances
     data = finance.read(w.id, w.owner)
     finance.find_purchase(data, purchase_id)["status"] = "paid"
     finance.write(data, w.owner)
-    fulfillment.record_receipt(w.id, purchase_id, receipt, w.session)
-    fulfillment.record_receipt(w.id, purchase_id, receipt, w.session)
+    monkeypatch.setitem(app.dependency_overrides, authenticated, lambda: w.session)
+    client = TestClient(app)
+    endpoint = f"/api/operations/{w.id}/purchases/{purchase_id}/receipts"
+    payload = receipt.model_dump(mode="json")
+    assert client.post(endpoint, json=payload).status_code == 200
+    assert client.post(endpoint, json=payload).status_code == 200
     with pytest.raises(HTTPException) as conflict:
         fulfillment.record_receipt(w.id, purchase_id, receipt.model_copy(update={"location": "Other shelter"}), w.session)
     assert conflict.value.status_code == 409
@@ -181,11 +186,19 @@ def order(p, status="APPROVED", captured=None):
     return {"id": "ORDER", "status": status, "purchase_units": [unit], "links": [{"rel": "payer-action", "href": "https://www.sandbox.paypal.com/checkoutnow?token=ORDER"}]}
 
 
-def test_approval_idempotency_and_no_double_purchase(workspace):
+def test_approval_idempotency_and_no_double_purchase(workspace, monkeypatch):
     w = workspace
     request = approval_for(w)
-    first = finance.approve(w.id, request, w.session)
-    assert finance.approve(w.id, request, w.session)["id"] == first["id"]
+    monkeypatch.setitem(app.dependency_overrides, authenticated, lambda: w.session)
+    client = TestClient(app)
+    endpoint = f"/api/operations/{w.id}/approve"
+    payload = request.model_dump(mode="json")
+    assert client.post(endpoint, json={**payload, "request_id": "invalid"}).status_code == 422
+    assert client.post(endpoint, json={**payload, "expected_revision": "1"}).status_code == 422
+    first = client.post(endpoint, json=payload)
+    assert first.status_code == 200
+    retry = client.post(endpoint, json=payload)
+    assert retry.status_code == 200 and retry.json()["id"] == first.json()["id"]
     state = finance.read(w.id, w.owner)["state"]
     assert len(state["purchases"]) == 2
     assert all(b["available_cents"] == 0 for b in finance.balances(state).values())

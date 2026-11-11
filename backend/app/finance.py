@@ -142,7 +142,7 @@ def recipient(supplier):
 class Approve(Record):
     expected_revision: int = Field(ge=1)
     input_digest: str = Field(min_length=64, max_length=64)
-    request_id: UUID
+    request_id: UUID = Field(strict=False)
     purchases: list[Purchase] = Field(min_length=1, max_length=24)
 
 
