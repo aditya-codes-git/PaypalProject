@@ -93,7 +93,7 @@ test('evidence remains a proposal until explicit source review and confirmation'
 });
 
 test('operation input changes apply only after validation', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?workspace=1');
   await startGuestPlan(page);
   await page.getByRole('button', { name: 'Plan settings', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Supplies per household' })).toBeVisible();

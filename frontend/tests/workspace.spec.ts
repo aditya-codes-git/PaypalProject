@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { startGuestPlan } from './helpers/setup';
 
 async function openSample(page: Page) {
-  await page.goto('/');
+  await page.goto('/?workspace=1');
   await startGuestPlan(page);
 }
 

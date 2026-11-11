@@ -20,7 +20,7 @@ export function WorkspaceGate() {
   const [client, setClient] = useState<SupabaseClient | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [guest, setGuest] = useState(false);
+  const [guest, setGuest] = useState(() => new URLSearchParams(window.location.search).get('guest') === '1');
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
 
@@ -29,6 +29,10 @@ export function WorkspaceGate() {
     let unsubscribe: (() => void) | undefined;
     const callbackUrl = new URL(window.location.href);
     const callbackHash = new URLSearchParams(callbackUrl.hash.slice(1));
+    if (!callbackUrl.searchParams.has('workspace')) {
+      callbackUrl.searchParams.set('workspace', '1');
+      window.history.replaceState(window.history.state, '', callbackUrl);
+    }
     const callbackError = callbackUrl.searchParams.get('error') ?? callbackHash.get('error');
     const hadCode = callbackUrl.searchParams.has('code');
     setLoading(true);
@@ -59,7 +63,12 @@ export function WorkspaceGate() {
   }, [attempt]);
 
   if (loading) return <div className="auth-shell"><div className="auth-card"><p role="status">Opening your workspace…</p></div></div>;
-  if (guest) return <App key="guest" account={null} onExit={() => setGuest(false)} />;
+  if (guest) return <App key="guest" account={null} onExit={() => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('guest');
+    window.history.replaceState(window.history.state, '', url);
+    setGuest(false);
+  }} />;
   if (session && client) return <App key={session.user.id} account={{ client, session }} onExit={async () => {
     const { error: signOutError } = await client.auth.signOut({ scope: 'local' });
     if (signOutError) setError('Signed out on this device, but the server could not confirm session revocation.');

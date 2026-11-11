@@ -37,7 +37,7 @@ test('stale saves leave local edits intact', async ({ page }) => {
 
 test('invalid credentials stay on sign-in and do not open saved data', async ({ page }) => {
   await mockCloud(page);
-  await page.goto('/');
+  await page.goto('/?workspace=1');
   await page.getByLabel('Email address', { exact: true }).fill('coordinator@example.test');
   await page.getByLabel('Password', { exact: true }).fill('wrong-password');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();

@@ -12,7 +12,7 @@ test('Google button starts a PKCE flow with the current app as redirect', async 
     authorization = new URL(route.request().url());
     return route.fulfill({ contentType: 'text/html', body: '<h1>Provider authorization started</h1>' });
   });
-  await page.goto('/');
+  await page.goto('/?workspace=1');
   await page.getByRole('button', { name: 'Continue with Google' }).click();
   await expect(page.getByRole('heading', { name: 'Provider authorization started' })).toBeVisible();
   expect(authorization!.searchParams.get('provider')).toBe('google');
@@ -37,11 +37,11 @@ test('OAuth callback exchanges the code and opens the signed-in workspace', asyn
     return route.fulfill({ json: { access_token: token, token_type: 'bearer', refresh_token: 'mock-refresh', expires_in: 3600, user } });
   });
   await page.route('https://oauth-test.supabase.co/auth/v1/user', route => route.fulfill({ json: user }));
-  await page.goto('/');
+  await page.goto('/?workspace=1');
   await page.getByRole('button', { name: 'Continue with Google' }).click();
   await expect(page.getByRole('region', { name: 'Saved operations' })).toBeVisible();
   expect(exchanged).toBeTruthy();
-  await expect(page).toHaveURL('http://127.0.0.1:5173/');
+  await expect(page).toHaveURL('http://127.0.0.1:5173/?workspace=1');
   await page.reload();
   await expect(page.getByRole('region', { name: 'Saved operations' })).toBeVisible();
 });
@@ -51,7 +51,7 @@ test('cancelled OAuth displays a safe error and cleans callback parameters', asy
   await page.goto('/?error=access_denied&error_description=private-provider-details');
   await expect(page.getByRole('alert')).toContainText('Google sign-in was cancelled');
   await expect(page.getByRole('alert')).not.toContainText('private-provider-details');
-  await expect(page).toHaveURL('http://127.0.0.1:5173/');
+  await expect(page).toHaveURL('http://127.0.0.1:5173/?workspace=1');
   await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeEnabled();
 });
 

@@ -6,7 +6,7 @@ test.use({ colorScheme: 'light' });
 for (const theme of ['light', 'dark'] as const) {
   test(`${theme} theme covers authentication, dashboard, table, and plan dialog`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.goto('/');
+    await page.goto('/?workspace=1');
     await expect(page.getByRole('heading', { name: 'Sign in to ReliefOps' })).toBeVisible();
     if (theme === 'dark') await page.getByRole('button', { name: 'Switch to dark theme' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
@@ -29,7 +29,7 @@ for (const theme of ['light', 'dark'] as const) {
 
   test(`${theme} theme fits mobile without horizontal overflow`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/');
+    await page.goto('/?workspace=1');
     await expect(page.getByRole('heading', { name: 'Sign in to ReliefOps' })).toBeVisible();
     if (theme === 'dark') await page.getByRole('button', { name: 'Switch to dark theme' }).click();
     await expect(page.locator('body')).toHaveJSProperty('scrollWidth', 390);
@@ -44,7 +44,7 @@ for (const theme of ['light', 'dark'] as const) {
 }
 
 test('theme preference survives refresh and can be changed again', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?workspace=1');
   await page.getByRole('button', { name: 'Switch to dark theme' }).click();
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');

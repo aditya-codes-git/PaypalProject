@@ -40,7 +40,7 @@ export async function mockCloud(page: Page) {
 }
 
 export async function signIn(page: Page, save = true) {
-  await page.goto('/');
+  await page.goto('/?workspace=1');
   await page.getByLabel('Email address', { exact: true }).fill('coordinator@example.test');
   await page.getByLabel('Password', { exact: true }).fill('test-password');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();

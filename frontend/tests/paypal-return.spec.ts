@@ -40,7 +40,7 @@ for (const payment of ['approved', 'cancelled'] as const) {
       expect(captures).toBe(0);
     }
     await expect(page.getByRole('button', { name: 'Complete payment', exact: true })).toHaveCount(0);
-    await expect(page).toHaveURL('http://127.0.0.1:5173/');
+    await expect(page).toHaveURL('http://127.0.0.1:5173/?workspace=1');
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Start a relief operation' })).toBeVisible();
     expect(captures).toBe(payment === 'approved' ? 1 : 0);
