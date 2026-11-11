@@ -19,7 +19,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from app.main import app
 
-from app import finance, payments, documents
+from app import finance, payments, documents, fulfillment
 from app.models import PlanningRequest
 from app.planner import solve
 
@@ -102,6 +102,76 @@ def approved(w):
     request = approval_for(w)
     finance.approve(w.id, request, w.session)
     return finance.read(w.id, w.owner)["state"]["purchases"][0]
+
+
+def test_closed_short_delivery_replans_only_missing_units_and_preserves_finances(workspace):
+    w = workspace
+    purchase = approved(w)
+    purchase_id = purchase["id"]
+    details = fulfillment.SupplierConfirmation(supplier_reference="SO-17", invoice_reference="INV-17")
+    fulfillment.confirm_supplier(w.id, purchase_id, details, w.session)
+    receipt = fulfillment.Receipt(request_id=uuid4(), reference="RC-1", location="North shelter",
+                                  accepted_units=1, rejected_units=1, close_delivery=True)
+    with pytest.raises(HTTPException) as error:
+        fulfillment.record_receipt(w.id, purchase_id, receipt, w.session)
+    assert error.value.status_code == 409
+    data = finance.read(w.id, w.owner)
+    finance.find_purchase(data, purchase_id)["status"] = "paid"
+    finance.write(data, w.owner)
+    fulfillment.record_receipt(w.id, purchase_id, receipt, w.session)
+    fulfillment.record_receipt(w.id, purchase_id, receipt, w.session)
+    with pytest.raises(HTTPException) as conflict:
+        fulfillment.record_receipt(w.id, purchase_id, receipt.model_copy(update={"location": "Other shelter"}), w.session)
+    assert conflict.value.status_code == 409
+
+    data = finance.read(w.id, w.owner)
+    request = finance.effective_scenario(data["operation"], data["state"])
+    assert request.committed[purchase["need_id"]] == 1
+    assert next(offer.stock for offer in request.offers if offer.id == purchase["offer_id"]) == 0
+    report = fulfillment.funding_report(w.id, w.session)
+    line = next(row for row in report["purchases"] if row["purchase_id"] == purchase_id)
+    assert line["received_units"] == 1 and line["receipts"][0]["location"] == "North shelter"
+    assert len(line["receipts"]) == 1 and "reference" not in line["receipts"][0]
+    assert sum(fund["spent_cents"] for fund in report["funds"]) == purchase["cost_cents"]
+    with pytest.raises(HTTPException) as denied:
+        fulfillment.funding_report(w.id, SimpleNamespace(user_id=str(uuid4())))
+    assert denied.value.status_code == 404
+
+    finance.find_purchase(data, purchase_id)["status"] = "refunded"
+    finance.write(data, w.owner)
+    request = finance.effective_scenario(data["operation"], data["state"])
+    assert request.committed[purchase["need_id"]] == 1
+    assert sum(fund["spent_cents"] for fund in fulfillment.funding_report(w.id, w.session)["funds"]) == 0
+
+
+def test_concurrent_delivery_receipts_cannot_overcount(workspace, monkeypatch):
+    w = workspace
+    purchase_id = approved(w)["id"]
+    data = finance.read(w.id, w.owner)
+    finance.find_purchase(data, purchase_id)["status"] = "paid"
+    finance.write(data, w.owner)
+    barrier = Barrier(2)
+    write = finance.write
+
+    def race(data, owner):
+        barrier.wait(timeout=10)
+        return write(data, owner)
+
+    monkeypatch.setattr(finance, "write", race)
+
+    def submit(_):
+        receipt = fulfillment.Receipt(request_id=uuid4(), reference="RC", location="North shelter",
+                                      accepted_units=2, rejected_units=0)
+        try:
+            fulfillment.record_receipt(w.id, purchase_id, receipt, w.session)
+            return 200
+        except HTTPException as error:
+            return error.status_code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert sorted(pool.map(submit, range(2))) == [200, 409]
+    saved = finance.find_purchase(finance.read(w.id, w.owner), purchase_id)
+    assert finance.received_units(saved) == 2 and saved["delivery_closed"]
 
 
 def order(p, status="APPROVED", captured=None):
@@ -261,6 +331,8 @@ def test_evidence_confirmation_is_atomic_and_idempotent(workspace,monkeypatch):
     data=finance.read(w.id,w.owner)
     assert len(data["operation"]["scenario"]["funds"])==3
     assert data["state"]["documents"][0]["confirmed"]==[0]
+    fund = next(row for row in fulfillment.funding_report(w.id, w.session)["funds"] if row["id"] == result["fund"]["id"])
+    assert fund["source"] == {"filename": "grant.txt", "page": 1}
 
 
 def test_ai_rejects_fabricated_source_and_handles_rate_limit(monkeypatch):

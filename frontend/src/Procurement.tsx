@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cloudRequest, type Account, type Operation } from './cloud';
 import { useConfirmation } from './Confirmation';
+import { PurchaseDelivery, type Delivery } from './Fulfillment';
 import { money, type Plan } from './types';
 
-type Intent = { id: string; supplier: string; need_id: string; quantity: number; cost_cents: number; status: string; order_id: string | null; capture_id: string | null; approval_url: string | null; merchant_id: string };
+type Intent = Delivery & { id: string; supplier: string; need_id: string; quantity: number; cost_cents: number; status: string; order_id: string | null; capture_id: string | null; approval_url: string | null; merchant_id: string };
 type Evidence = { id: string; filename: string; hash: string; confirmed: number[]; pages: string[]; metadata: { model: string; usage: { total_tokens?: number } }; proposals: { warnings: string[]; funds: { name: string; amount_cents: number | null; categories: string[]; quote: string; page: number; requires_review: boolean; warnings: string[] }[] } };
 type Ledger = { version?: number; purchases: Intent[]; events: { id: string; at: string; actor: string; kind: string; message: string }[]; documents: Evidence[]; balances: Record<string, { opening_cents: number; reserved_cents: number; spent_cents: number; available_cents: number }> };
 
@@ -96,7 +97,7 @@ export function Purchases({ procurement, operation, clean, onPlan }: { procureme
           action: 'Request refund',
         })) void procurement.action(`/purchases/${p.id}/refund`).catch(() => {});
       }}>Request full refund</button>}
-    </div></article>)}
+    </div><PurchaseDelivery purchase={p} busy={procurement.busy} submit={(path, body) => procurement.action(`/purchases/${p.id}/${path}`, body)} /></article>)}
     {ledger && <button className="button subtle" onClick={() => download(operation, ledger)}>Download purchase record</button>}
   </section>;
 }

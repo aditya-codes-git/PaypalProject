@@ -13,6 +13,7 @@ The demo uses fictional relief data and sandbox money. Funding pools are operati
 - PayPal sandbox order creation, buyer approval, backend capture, provider reconciliation, full-refund requests and verified webhook handling.
 - Durable payment intents. Unknown outcomes retain commitments; reconciliation protects paid/pending supplies during replanning.
 - Groq-assisted funding proposals from text/PDF documents, exact source-quotation checks and human confirmation before rules activate.
+- Supplier confirmation and invoice references, delivery receipts, and a funding report linking grant pages, purchase allocations, and received quantities.
 - Saved audit and purchase export that excludes raw source-document text.
 - Responsive light/dark themes, self-hosted Geist, Lucide icons and an original generated logo. See [design references](design/README.md).
 
@@ -53,18 +54,20 @@ Google's provider settings live in Supabase, not `.env`. Allow exact app return 
 ## Run the submission demo
 
 1. Sign in to start an empty operation. For a short, reproducible walkthrough, enter 10 households, a 1-day delivery window, one food pack per household in the `food` category, and a supplier offering 10 units at $8 with delivery in 1 day. Enter a second offer at $9 with the same stock and delivery to demonstrate replanning.
-2. Save the operation with funding blank. Choose **Upload a grant document** and upload a text file containing: “The fictional Riverdale grant provides USD $100 exclusively for food packs.” Review the source quote, amount and category, then confirm the grant. Alternatively, enter and confirm a budget manually.
+2. Save the operation with funding blank. Choose **Upload a grant document** and upload the [fictional Riverdale grant](demo/riverdale-grant.txt). Review the source quote, amount and category, then confirm the grant. Alternatively, enter and confirm a budget manually.
 3. Generate the purchasing plan. The $8 offer should cover 10 households for $80. Exclude that offer and generate again. The $9 offer should cover the same households for $90.
 4. Choose **Approve and reserve funds** and confirm. In **Purchases**, select **Pay with PayPal**, approve the order with a separate sandbox buyer, return, and select **Complete payment**. Use **Check PayPal status** if the payment outcome is uncertain.
-5. Confirm the purchase shows **Paid** and the amount moved from reserved to spent. Inspect **Activity** and download the purchase record. The export omits raw source text.
+5. Confirm the purchase shows **Paid** and the amount moved from reserved to spent. Open **Supplier and delivery** to record the supplier reference and a receipt. Close a short delivery only when the remaining units are no longer expected. Generate another plan to cover the shortage, then open **Reports** to inspect spending, receipts, and the grant source page. The funding report omits raw source text, payment credentials, and provider IDs.
 
 For a quick public check, choose **Start without signing in** and enter the same needs, offers and a confirmed $100 food budget yourself. Guest plans are not saved and do not create purchases.
 
-Before submission, verify the hosted signed-in workflow with a dedicated test account and PayPal sandbox buyer, check judge access in a clean browser, and record a public video under three minutes. In future releases, extend the same workflow with team approvals, supplier order confirmation, delivery tracking and funder reports.
+Before submission, verify the hosted signed-in workflow with a dedicated test account and PayPal sandbox buyer, check judge access in a clean browser, and record a public video under three minutes. See [submission copy and recording cues](SUBMISSION_KIT.md).
 
 Unmapped fictional suppliers all use the application's default sandbox merchant. Distinct recipients require controlled sandbox merchant mappings; this is not a marketplace onboarding integration. Prices must include all payable unit costs; tax/shipping are not calculated separately. Stock and delivery are reported inputs.
 
 After the first financial initialization, draft funding fields cannot replenish committed money. Record an explicit opening-allocation adjustment with a reason; it cannot lower a pool below existing commitments.
+
+Supplier and invoice references are recorded by the operator. Receipts require a paid purchase. Open deliveries count their outstanding quantities as committed. Closing a short delivery makes the missing quantities eligible for replanning while keeping the original payment in the ledger. Received units remain part of coverage even if PayPal refunds the payment.
 
 ## Evidence and recovery limits
 

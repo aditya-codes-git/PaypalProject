@@ -181,6 +181,7 @@ def confirm(operation_id: UUID, document_id: UUID, proposal: ConfirmProposal, se
     scenario.funds.append(fund)
     data["state"]["opening"][fund.id] = fund.available_cents
     document["confirmed"].append(proposal.proposal_index)
+    document.setdefault("fund_links", {})[str(proposal.proposal_index)] = fund.id
     finance.event(data["state"], session.user_id, "rule_confirmed", f"Human-confirmed {fund.name}; source {document['hash']}, proposal {proposal.proposal_index}, categories {fund.categories}.")
     result = finance.write(data, session.user_id, scenario.model_dump())
     return {"operation": result["operation"], "fund": fund.model_dump()}

@@ -106,15 +106,23 @@ def effective_scenario(operation, state):
         fund.available_cents = remaining.get(fund.id, {"available_cents": 0})["available_cents"]
     committed_by_offer = {}
     for purchase in state["purchases"]:
-        if purchase["status"] in COMMITTED:
+        committed = purchase["status"] in COMMITTED
+        received = received_units(purchase)
+        quantity = purchase["quantity"] if committed and not purchase.get("delivery_closed") else received
+        if quantity:
             need = next((n for n in request.needs if n.id == purchase["need_id"]), None)
             if need is None:
                 raise HTTPException(409, "Restore the committed supply type before replanning.")
-            request.committed[need.id] = request.committed.get(need.id, 0) + purchase["quantity"]
-            committed_by_offer[purchase["offer_id"]] = committed_by_offer.get(purchase["offer_id"], 0) + purchase["quantity"]
+            request.committed[need.id] = request.committed.get(need.id, 0) + quantity
+        stock_used = purchase["quantity"] if committed else received
+        committed_by_offer[purchase["offer_id"]] = committed_by_offer.get(purchase["offer_id"], 0) + stock_used
     for offer in request.offers:
         offer.stock = max(0, offer.stock - committed_by_offer.get(offer.id, 0))
     return request
+
+
+def received_units(purchase):
+    return sum(receipt["accepted_units"] for receipt in purchase.get("receipts", []))
 
 
 def recipient(supplier):
@@ -169,6 +177,7 @@ def approve(operation_id: UUID, approval: Approve, session: UserSession):
     for purchase in plan.purchases:
         merchant, fingerprint = recipient(purchase.supplier)
         state["purchases"].append({**purchase.model_dump(), "id": str(uuid4()), "approval_id": record["id"],
+                                  "supply_name": next(n.name for n in request.needs if n.id == purchase.need_id),
                                   "status": "reserved", "merchant_id": merchant, "recipient_fingerprint": fingerprint,
                                   "currency": "USD", "created_at": now(), "order_id": None, "capture_id": None,
                                   "approval_url": None, "refund_id": None,

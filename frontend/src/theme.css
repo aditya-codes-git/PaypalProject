@@ -370,3 +370,8 @@ h1 { font-size: clamp(34px, 3.4vw, 50px); letter-spacing: -.045em; line-height: 
 
 .setup-intro { margin: -9px 0 24px; color: var(--muted); max-width: 65ch; }
 .funding-start { margin-bottom: 20px; }
+.delivery-panel > p, .delivery-panel > form { margin-top: 14px; }
+.delivery-panel .receipt-form { border-top: 1px solid var(--border); padding-top: 16px; }
+.receipt-list { padding-left: 20px; color: var(--muted); }
+.input-grid .receipt-close { flex-direction: row; align-items: center; }
+.receipt-close input { width: 17px; min-height: 17px; accent-color: var(--accent); flex-shrink: 0; }

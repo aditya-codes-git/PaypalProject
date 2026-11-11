@@ -18,6 +18,7 @@ from .cloud import public_configuration, router as cloud_router
 from .finance import router as finance_router
 from .payments import router as payments_router
 from .documents import router as documents_router
+from .fulfillment import router as fulfillment_router
 from .limits import limits
 
 @asynccontextmanager
@@ -40,6 +41,7 @@ app.include_router(cloud_router)
 app.include_router(finance_router)
 app.include_router(payments_router)
 app.include_router(documents_router)
+app.include_router(fulfillment_router)
 
 
 @app.get("/api/public-config")

@@ -10,6 +10,7 @@ import { useSavedWorkspace } from './useSavedWorkspace';
 import { ApproveAction, DurableActivity, EvidencePanel, FundingLedger, Purchases, useProcurement } from './Procurement';
 import { InputEditor } from './InputEditor';
 import { useConfirmation } from './Confirmation';
+import { FundingReport } from './Fulfillment';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 const pages = {
@@ -19,6 +20,7 @@ const pages = {
   'Funding': { title: 'Manage funding', icon: 'fund' },
   'Grant documents': { title: 'Review grant documents', icon: 'shield' },
   Purchases: { title: 'Approved purchases', icon: 'box' },
+  Reports: { title: 'Operation reports', icon: 'fund' },
   Activity: { title: 'Activity history', icon: 'activity' },
 } as const;
 type Tab = keyof typeof pages;
@@ -167,7 +169,7 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
   return <div className="app-shell">
     <aside className="sidebar" inert={drawer || showSetup}>
       <a className="brand" href="#" aria-label="ReliefOps overview" onClick={e => { e.preventDefault(); setTab('Overview'); }}><Brand /></a>
-      {!settingUp && <nav aria-label="Workspace navigation">{tabs.map(name => (
+      {!settingUp && <nav aria-label="Workspace navigation">{tabs.filter(name => account || name !== 'Reports').map(name => (
         <button key={name} aria-current={tab === name ? 'page' : undefined} className={`nav-item ${tab === name ? 'selected' : ''}`} onClick={() => setTab(name)}>
           <Icon name={pages[name].icon} /><span>{name}</span>
         </button>
@@ -275,6 +277,7 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
         {tab === 'Purchases' && (account && workspace.active ? <Purchases procurement={procurement} operation={workspace.active} clean={!isDirty} onPlan={() => setTab('Overview')} /> : <section className="card empty-state"><h2>Save an operation to manage purchases</h2><p>Approved items appear here, ready for test checkout.</p><button className="button primary" onClick={account ? () => setTab('Overview') : exitWorkspace}>{account ? 'Go to overview' : 'Sign in'}</button></section>)}
         {tab === 'Grant documents' && (account && workspace.active ? <EvidencePanel procurement={procurement} operation={workspace.active} clean={!isDirty} reload={() => workspace.load(workspace.active!.id)} /> : <section className="card empty-state"><h2>Save an operation to upload a grant</h2><p>Upload a document to find the grant amount and what it can pay for.</p><button className="button primary" onClick={account ? () => setTab('Overview') : exitWorkspace}>{account ? 'Go to overview' : 'Sign in'}</button></section>)}
         {tab === 'Activity' && account && workspace.active && <DurableActivity procurement={procurement} />}
+        {tab === 'Reports' && account && workspace.active && <FundingReport key={workspace.active.id} account={account} operationId={workspace.active.id} />}
         {tab === 'Funding' && account && workspace.active && !isDirty && <FundingLedger procurement={procurement} operation={workspace.active} />}
         {tab === 'Overview' && account && workspace.history.length > 0 && <section className="card saved-history"><div className="card-heading"><div><h2>Previous plans</h2></div></div>{workspace.history.map(calculation => <button className="history-row" key={calculation.id} onClick={() => { setPlan(calculation.result); setPlannedSnapshot(fingerprint(calculation.scenario)); setDrawer(true); }}><span><strong>{calculation.result.complete_kits} complete kits</strong><small>{new Date(calculation.created_at).toLocaleString()}</small></span><strong>{money(calculation.result.total_cost_cents)}</strong><Icon name="arrow" size={16} /></button>)}</section>}
         </>}
