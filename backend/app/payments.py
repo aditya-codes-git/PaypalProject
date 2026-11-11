@@ -330,11 +330,13 @@ async def webhook(request: Request):
 
 
 def process_webhook(body, headers, webhook_id):
-    provider = PayPal()
     # Verify via PayPal; do not fetch arbitrary certificate URLs from untrusted headers.
     payload = {key: headers.get("paypal-" + key.replace("_", "-"), "")
                for key in ("auth_algo", "cert_url", "transmission_id", "transmission_sig", "transmission_time")}
+    if not all(value.strip() for value in payload.values()):
+        raise HTTPException(400, "Missing PayPal webhook signature headers.")
     payload.update(webhook_id=webhook_id, webhook_event=body)
+    provider = PayPal()
     verified = provider.request("POST", "/v1/notifications/verify-webhook-signature", payload)
     if verified.get("verification_status") != "SUCCESS":
         raise HTTPException(400, "Invalid PayPal webhook signature.")

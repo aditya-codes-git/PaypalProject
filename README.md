@@ -107,7 +107,9 @@ Verification recorded during implementation:
 - A constrained local Docker smoke test at 512 MB / 0.1 CPU served the app and calculated 60 kits in approximately 97 ms at approximately 80 MB memory. This is one dataset, not a hosted capacity guarantee.
 - A real Groq synthetic extraction passed, using 1,121 tokens. Real PayPal sandbox authentication, order creation and recipient validation passed.
 
-Still requiring a real-account/hosted verification pass: Google consent and authenticated browser round trip, buyer-approved PayPal capture, refund, webhook delivery/signature round trip, and Render deployment. Do not present simulated payment tests or successful order creation as proof of money capture.
+The [hosted demo](https://reliefops-aditya-2026.onrender.com) is live on Render Free. The hosted URL is allowed in Supabase Auth, and the PayPal sandbox webhook is registered and configured on Render.
+
+Still to verify with real accounts: hosted Google sign-in, buyer-approved PayPal capture and refund, and signed webhook delivery. The sandbox order creation test did not capture a payment.
 
 ## Deployment
 
@@ -115,7 +117,7 @@ Still requiring a real-account/hosted verification pass: Google consent and auth
 
 Register `https://YOUR_APP_HOST/api/paypal/webhook` in the same PayPal sandbox app, subscribe to the checkout/capture/refund events used by the demo, then set its webhook ID and restart. Until that round trip is verified, provider lookup remains the explicit reconciliation path.
 
-No paid service is required by this configuration. Actual account eligibility, shared quotas, free-plan suspension and retained judging access must be checked in the accounts; configuration does not reserve free capacity. No always-on worker, paid database, Redis or extra sponsor integration is assumed. AG Grid Community is integrated; Render is the prepared hosting target.
+No paid service is required by this configuration. Actual account eligibility, shared quotas, free-plan suspension and retained judging access must be checked in the accounts; configuration does not reserve free capacity. No always-on worker, paid database, Redis or extra sponsor integration is assumed. The demo uses AG Grid Community and runs on Render Free.
 
 ## Source map
 

@@ -81,6 +81,9 @@ def workspace(database_url, monkeypatch):
                 raise HTTPException(404, "Not accessible")
     monkeypatch.setattr(finance, "gateway", gateway)
     monkeypatch.setenv("PAYPAL_CLIENT_ID", "fixture-app")
+    monkeypatch.setenv("PAYPAL_CLIENT_SECRET", "fixture-secret-no-provider-access")
+    monkeypatch.setenv("PAYPAL_ENVIRONMENT", "sandbox")
+    monkeypatch.setenv("APP_ORIGIN", "http://127.0.0.1:5173")
     monkeypatch.delenv("PAYPAL_SUPPLIER_MERCHANTS", raising=False)
     monkeypatch.delenv("PAYPAL_MERCHANT_ID", raising=False)
     yield SimpleNamespace(id=operation_id, owner=owner, session=SimpleNamespace(user_id=owner), scenario=scenario, db=database_url)
@@ -284,14 +287,17 @@ def test_verified_webhooks_deduplicate_and_delayed_events_cannot_regress_payment
     monkeypatch.setattr(payments.PayPal,"request",provider)
     body={"id":"EVENT1","event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"supplementary_data":{"related_ids":{"order_id":"ORDER"}}}}
     client=TestClient(app)
-    assert client.post('/api/paypal/webhook',json=body).status_code==200
-    assert client.post('/api/paypal/webhook',json=body).json()["duplicate"]
+    assert client.post('/api/paypal/webhook',json=body).status_code==400
+    headers = {f"paypal-{key}": "fixture" for key in
+               ("auth-algo", "cert-url", "transmission-id", "transmission-sig", "transmission-time")}
+    assert client.post('/api/paypal/webhook',json=body,headers=headers).status_code==200
+    assert client.post('/api/paypal/webhook',json=body,headers=headers).json()["duplicate"]
     provider_order=order(p,"APPROVED")
     body["id"]="EVENT2"
-    assert client.post('/api/paypal/webhook',json=body).status_code==200
+    assert client.post('/api/paypal/webhook',json=body,headers=headers).status_code==200
     assert finance.find_purchase(finance.read(w.id,w.owner),p["id"])["status"]=="paid"
     monkeypatch.setattr(payments.PayPal,"request",lambda *a,**k:{"verification_status":"FAILURE"})
-    assert client.post('/api/paypal/webhook',json=body).status_code==400
+    assert client.post('/api/paypal/webhook',json=body,headers=headers).status_code==400
 
 
 def test_stale_and_forged_approval_are_rejected(workspace):
