@@ -27,12 +27,12 @@ test('calculate, withdraw a supplier, and replan using the real API', async ({ p
 
 test('fund restrictions produce a visible partial result', async ({ page }) => {
   await openSample(page);
-  await page.getByRole('button', { name: 'Funding pools', exact: true }).click();
+  await page.getByRole('button', { name: 'Funding', exact: true }).click();
   await page.getByRole('spinbutton', { name: 'Emergency reserve amount' }).fill('0');
   await page.getByRole('button', { name: 'Generate plan with these funds' }).click();
   const dialog = page.getByRole('dialog', { name: 'Purchasing plan' });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByText('Some needs remain unmet.')).toBeVisible();
+  await expect(dialog.getByText('Supplies still needed')).toBeVisible();
   await expect(dialog.getByText('$0', { exact: true })).toBeVisible();
 });
 
@@ -47,7 +47,7 @@ test('mobile navigation and setup dialog work without credentials', async ({ pag
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button', { name: 'Activity', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Decision history' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Changes in this session' })).toBeVisible();
 });
 
 test('modal contains keyboard focus and restores it on close', async ({ page }) => {
@@ -68,7 +68,7 @@ test('API failures show a recoverable error rather than a fabricated plan', asyn
   await page.route('**/api/plan', route => route.abort());
   await openSample(page);
   await page.getByRole('button', { name: 'Generate purchasing plan' }).click();
-  await expect(page.getByRole('alert')).toContainText('Cannot reach the backend');
+  await expect(page.getByRole('alert')).toContainText('Could not reach the planner');
   await expect(page.getByRole('dialog', { name: 'Purchasing plan' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Generate purchasing plan' })).toBeEnabled();
 });

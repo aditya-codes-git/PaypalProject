@@ -8,11 +8,11 @@ test('sign in, save, calculate, refresh, restore, and sign out', async ({ page }
   await page.getByLabel('Operation name', { exact: true }).fill('Saved flood response');
   await page.getByLabel('Households to reach').fill('55');
   await page.getByRole('button', { name: 'Save operation', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('All operation inputs saved');
+  await expect(page.getByRole('status')).toContainText('Saved');
   await page.getByRole('button', { name: 'Generate purchasing plan' }).click();
   await expect(page.getByRole('dialog', { name: 'Purchasing plan' })).toBeVisible();
   await page.getByRole('button', { name: 'Back to workspace' }).click();
-  await expect(page.getByRole('heading', { name: 'Saved calculations' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Previous plans' })).toBeVisible();
   expect(state.plans).toHaveLength(1);
   await page.reload();
   page.on('dialog', dialog => dialog.accept());
@@ -20,9 +20,9 @@ test('sign in, save, calculate, refresh, restore, and sign out', async ({ page }
   // The freshly opened draft is intentionally not auto-saved or silently restored.
   // Selecting a saved operation asks before replacing that draft.
   await expect(page.getByLabel('Households to reach')).toHaveValue('55');
-  await expect(page.getByRole('heading', { name: 'Saved calculations' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Previous plans' })).toBeVisible();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Welcome to your workspace' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in to ReliefOps' })).toBeVisible();
   await expect(page.getByLabel('Operation name', { exact: true })).toHaveCount(0);
 });
 
@@ -30,7 +30,7 @@ test('stale saves leave local edits intact', async ({ page }) => {
   const state = await mockCloud(page);
   await signIn(page);
   await page.getByRole('button', { name: 'Save operation', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('All operation inputs saved');
+  await expect(page.getByRole('status')).toContainText('Saved');
   state.conflict = true;
   await page.getByLabel('Households to reach').fill('47');
   await page.getByRole('button', { name: 'Save operation', exact: true }).click();
@@ -52,7 +52,7 @@ test('sign-out protects unsaved edits and reports revocation failures', async ({
   const state = await mockCloud(page);
   await signIn(page);
   await page.getByRole('button', { name: 'Save operation', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('All operation inputs saved');
+  await expect(page.getByRole('status')).toContainText('Saved');
   await page.getByLabel('Households to reach').fill('43');
   page.once('dialog', dialog => dialog.dismiss());
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
@@ -61,6 +61,6 @@ test('sign-out protects unsaved edits and reports revocation failures', async ({
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Signed out on this device');
-  await expect(page.getByRole('heading', { name: 'Welcome to your workspace' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in to ReliefOps' })).toBeVisible();
   await expect(page.getByLabel('Households to reach')).toHaveCount(0);
 });

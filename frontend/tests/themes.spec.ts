@@ -6,7 +6,7 @@ for (const theme of ['light', 'dark'] as const) {
   test(`${theme} theme covers authentication, dashboard, table, and plan dialog`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Welcome to your workspace' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Sign in to ReliefOps' })).toBeVisible();
     if (theme === 'dark') await page.getByRole('button', { name: 'Switch to dark theme' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     await expect(page.locator('.google-button')).toHaveCSS('background-color', theme === 'dark' ? 'rgb(17, 17, 20)' : 'rgb(255, 255, 255)');
@@ -29,12 +29,13 @@ for (const theme of ['light', 'dark'] as const) {
   test(`${theme} theme fits mobile without horizontal overflow`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Welcome to your workspace' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Sign in to ReliefOps' })).toBeVisible();
     if (theme === 'dark') await page.getByRole('button', { name: 'Switch to dark theme' }).click();
     await expect(page.locator('body')).toHaveJSProperty('scrollWidth', 390);
     await page.getByRole('button', { name: 'Explore sample workspace' }).click();
     await expect(page.getByRole('heading', { name: 'Operation overview' })).toBeVisible();
     await expect(page.locator('body')).toHaveJSProperty('scrollWidth', 390);
+    await expect(page.getByRole('button', { name: 'Generate purchasing plan' })).toBeInViewport();
     await page.screenshot({ path: `../design/previews/mobile-${theme}.png`, fullPage: true });
     await page.getByRole('button', { name: 'Open integration setup' }).click();
     await expect(page.getByRole('dialog', { name: 'Integration setup' })).toBeVisible();
