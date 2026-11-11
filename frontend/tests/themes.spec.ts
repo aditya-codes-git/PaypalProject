@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { startGuestPlan } from './helpers/setup';
 
 test.use({ colorScheme: 'light' });
 
@@ -12,7 +13,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.locator('.google-button')).toHaveCSS('background-color', theme === 'dark' ? 'rgb(17, 17, 20)' : 'rgb(255, 255, 255)');
     await page.evaluate(() => document.fonts.ready);
     await page.screenshot({ path: `../design/previews/signin-${theme}.png`, fullPage: true, animations: 'disabled' });
-    await page.getByRole('button', { name: 'Explore sample workspace' }).click();
+    await startGuestPlan(page);
     await expect(page.getByRole('heading', { name: 'Operation overview' })).toBeVisible();
     await expect(page.locator('body')).toHaveCSS('background-color', theme === 'dark' ? 'rgb(9, 9, 11)' : 'rgb(255, 255, 255)');
     await page.screenshot({ path: `../design/previews/overview-${theme}.png`, fullPage: true });
@@ -32,7 +33,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.getByRole('heading', { name: 'Sign in to ReliefOps' })).toBeVisible();
     if (theme === 'dark') await page.getByRole('button', { name: 'Switch to dark theme' }).click();
     await expect(page.locator('body')).toHaveJSProperty('scrollWidth', 390);
-    await page.getByRole('button', { name: 'Explore sample workspace' }).click();
+    await startGuestPlan(page);
     await expect(page.getByRole('heading', { name: 'Operation overview' })).toBeVisible();
     await expect(page.locator('body')).toHaveJSProperty('scrollWidth', 390);
     await expect(page.getByRole('button', { name: 'Generate purchasing plan' })).toBeInViewport();

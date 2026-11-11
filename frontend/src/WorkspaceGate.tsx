@@ -20,7 +20,7 @@ export function WorkspaceGate() {
   const [client, setClient] = useState<SupabaseClient | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sample, setSample] = useState(false);
+  const [guest, setGuest] = useState(false);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
 
@@ -59,16 +59,16 @@ export function WorkspaceGate() {
   }, [attempt]);
 
   if (loading) return <div className="auth-shell"><div className="auth-card"><p role="status">Opening your workspace…</p></div></div>;
-  if (sample) return <App key="sample" account={null} onExit={() => setSample(false)} />;
+  if (guest) return <App key="guest" account={null} onExit={() => setGuest(false)} />;
   if (session && client) return <App key={session.user.id} account={{ client, session }} onExit={async () => {
     const { error: signOutError } = await client.auth.signOut({ scope: 'local' });
     if (signOutError) setError('Signed out on this device, but the server could not confirm session revocation.');
     setSession(null);
   }} />;
-  return <SignIn client={client} initialError={error} onSample={() => setSample(true)} onRetry={() => setAttempt(n => n + 1)} />;
+  return <SignIn client={client} initialError={error} onGuest={() => setGuest(true)} onRetry={() => setAttempt(n => n + 1)} />;
 }
 
-function SignIn({ client, initialError, onSample, onRetry }: { client: SupabaseClient | null; initialError: string; onSample: () => void; onRetry: () => void }) {
+function SignIn({ client, initialError, onGuest, onRetry }: { client: SupabaseClient | null; initialError: string; onGuest: () => void; onRetry: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -99,5 +99,5 @@ function SignIn({ client, initialError, onSample, onRetry }: { client: SupabaseC
     } catch { setError('The sign-in service could not be reached. Try again.'); }
     finally { setBusy(false); }
   }
-  return <div className="auth-shell"><div className="auth-appearance"><ThemeToggle /></div><section className="auth-intro"><Brand className="auth-brand" /><h1>Plan what to buy for a relief operation</h1><p>Match what households need with available supplies and funding.</p><AuthArtwork /></section><section className="auth-card"><h2>Sign in to ReliefOps</h2><p>Save your operations and return to them later.</p>{(error || initialError) && <div className="error-banner" role="alert">{error || initialError}</div>}<button className="button google-button full-width" type="button" disabled={busy || googleBusy || !client} onClick={googleSignIn}><span className="google-mark" aria-hidden="true">G</span>{googleBusy ? 'Connecting to Google…' : 'Continue with Google'}</button><div className="auth-or"><span>or sign in with email</span></div><form onSubmit={submit}><label>Email address<input autoComplete="username" type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" /></label><label>Password<input autoComplete="current-password" type="password" required value={password} onChange={e => setPassword(e.target.value)} /></label><button className="button primary full-width" type="submit" disabled={busy || googleBusy || !client}>{busy ? 'Signing in…' : 'Sign in'}</button></form>{!client && <><p className="auth-help">Sign-in is unavailable. You can still try the sample workspace.</p><button className="text-button" onClick={onRetry}>Retry connection</button></>}<div className="auth-divider" /><button className="button subtle full-width" onClick={onSample}>Explore sample workspace</button><small className="auth-sample-note">Try planning with sample data. No account needed.</small></section></div>;
+  return <div className="auth-shell"><div className="auth-appearance"><ThemeToggle /></div><section className="auth-intro"><Brand className="auth-brand" /><h1>Plan what to buy for a relief operation</h1><p>Match what households need with available supplies and funding.</p><AuthArtwork /></section><section className="auth-card"><h2>Sign in to ReliefOps</h2><p>Sign in to save an operation, review grants and approve purchases.</p>{(error || initialError) && <div className="error-banner" role="alert">{error || initialError}</div>}<button className="button google-button full-width" type="button" disabled={busy || googleBusy || !client} onClick={googleSignIn}><span className="google-mark" aria-hidden="true">G</span>{googleBusy ? 'Connecting to Google…' : 'Continue with Google'}</button><div className="auth-or"><span>or sign in with email</span></div><form onSubmit={submit}><label>Email address<input autoComplete="username" type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" /></label><label>Password<input autoComplete="current-password" type="password" required value={password} onChange={e => setPassword(e.target.value)} /></label><button className="button primary full-width" type="submit" disabled={busy || googleBusy || !client}>{busy ? 'Signing in…' : 'Sign in'}</button></form>{!client && <><p className="auth-help">Sign-in is unavailable. You can still build a plan without an account.</p><button className="text-button" onClick={onRetry}>Retry connection</button></>}<div className="auth-divider" /><button className="button subtle full-width" onClick={onGuest}>Start without signing in</button><small className="auth-sample-note">Enter your own data. Guest plans are not saved.</small></section></div>;
 }

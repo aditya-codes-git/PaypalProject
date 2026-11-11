@@ -16,9 +16,6 @@ test('sign in, save, calculate, refresh, restore, and sign out', async ({ page }
   expect(state.plans).toHaveLength(1);
   await page.reload();
   await page.getByLabel('Saved operation', { exact: true }).selectOption(operationId);
-  await page.getByRole('dialog', { name: 'Switch operations?' }).getByRole('button', { name: 'Discard and switch' }).click();
-  // The freshly opened draft is intentionally not auto-saved or silently restored.
-  // Selecting a saved operation asks before replacing that draft.
   await expect(page.getByLabel('Households to reach')).toHaveValue('55');
   await expect(page.getByRole('heading', { name: 'Previous plans' })).toBeVisible();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();

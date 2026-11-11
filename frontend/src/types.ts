@@ -5,3 +5,7 @@ export type Scenario = { currency: string; deadline_days: number; target_kits: n
 export type Purchase = { offer_id: string; need_id: string; supplier: string; quantity: number; cost_cents: number; allocations: { fund_id: string; amount_cents: number }[] };
 export type Plan = { id: string; input_digest: string; status: string; complete_kits: number; target_kits: number; total_cost_cents: number; purchases: Purchase[]; unmet: Record<string, number>; notes: string[]; elapsed_ms: number; finance_version?: number | null };
 export const money = (cents: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: cents % 100 ? 2 : 0 }).format(cents / 100);
+
+export function emptyScenario(): Scenario {
+  return { currency: 'USD', deadline_days: Number.NaN, target_kits: Number.NaN, needs: [], funds: [], offers: [] };
+}

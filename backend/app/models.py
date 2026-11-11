@@ -37,7 +37,7 @@ class PlanningRequest(Record):
     deadline_days: int = Field(ge=0, le=30)
     target_kits: int = Field(ge=1, le=100)
     needs: list[Need] = Field(min_length=1, max_length=6)
-    funds: list[Fund] = Field(min_length=1, max_length=6)
+    funds: list[Fund] = Field(max_length=6)
     offers: list[Offer] = Field(min_length=1, max_length=24)
     committed: dict[str, int] = Field(default_factory=dict, max_length=6)
 

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { fillOperationSetup, startGuestPlan } from './helpers/setup';
 import { mockCloud, signIn } from './helpers/cloud';
 
 test('review, approve, reserve, reload and cancel an unsubmitted purchase', async ({ page }) => {
@@ -36,7 +37,6 @@ test('review, approve, reserve, reload and cancel an unsubmitted purchase', asyn
   await expect(page.getByRole('button', { name: 'Pay with PayPal' })).toHaveCount(3);
   await page.reload();
   await page.getByLabel('Saved operation', { exact: true }).selectOption(state.operation.id);
-  await page.getByRole('dialog', { name: 'Switch operations?' }).getByRole('button', { name: 'Discard and switch' }).click();
   await page.getByRole('button', { name: 'Purchases', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Cancel purchase' })).toHaveCount(3);
   await page.getByRole('button', { name: 'Cancel purchase' }).first().click();
@@ -65,9 +65,13 @@ test('evidence remains a proposal until explicit source review and confirmation'
     state.operation.revision += 1;
     return route.fulfill({ json: { operation: state.operation } });
   });
-  await signIn(page);
+  await signIn(page, false);
+  await expect(page.getByLabel('Operation name')).toHaveValue('');
+  await fillOperationSetup(page, { signedIn: true, addFunding: false });
   await page.getByRole('button', { name: 'Save operation', exact: true }).click();
-  await page.getByRole('button', { name: 'Grant documents', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Add money to your plan' })).toBeVisible();
+  expect(state.operation.scenario.funds).toEqual([]);
+  await page.getByRole('button', { name: 'Upload a grant document' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Review grant documents' })).toBeVisible();
   await expect(page.getByLabel('Choose a grant file')).toBeInViewport();
   await expect(page.getByRole('region', { name: 'Saved operations' })).toHaveCount(0);
@@ -90,13 +94,14 @@ test('evidence remains a proposal until explicit source review and confirmation'
 
 test('operation input changes apply only after validation', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Explore sample workspace' }).click();
+  await startGuestPlan(page);
   await page.getByRole('button', { name: 'Plan settings', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Supplies per household' })).toBeVisible();
   await page.getByRole('button', { name: 'Add supply', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Remove supply', exact: true })).toHaveCount(4);
   await page.getByLabel('Supply name', { exact: true }).last().fill('Water');
   await page.getByLabel('Category', { exact: true }).last().fill('water');
+  await page.getByLabel('Units per household').last().fill('1');
   await page.getByRole('button', { name: 'Apply plan changes' }).click();
   await page.getByRole('button', { name: 'Overview', exact: true }).click();
   await expect(page.getByText('Water', { exact: true })).toBeVisible();

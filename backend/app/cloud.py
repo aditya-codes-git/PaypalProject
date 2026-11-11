@@ -135,6 +135,8 @@ def calculate_saved_plan(operation_id: UUID, revision: RevisionRequest, session:
         scenario = PlanningRequest.model_validate(operation["scenario"])
     except ValueError:
         raise HTTPException(422, "The saved operation contains unsupported inputs. Correct and save it first.")
+    if not any(fund.confirmed for fund in scenario.funds):
+        raise HTTPException(422, "Add or confirm funding before building a plan.")
     # Legacy installations can still calculate until the additive finance migration is installed.
     if os.getenv("RELIEFOPS_SERVER_KEY"):
         from .finance import read, effective_scenario

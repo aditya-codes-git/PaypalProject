@@ -1,6 +1,6 @@
-import type { Scenario } from './types';
+import type { Scenario } from '../../src/types';
 
-export const createDemo = (): Scenario => ({
+export const testScenario = (): Scenario => ({
   currency: 'USD', deadline_days: 1, target_kits: 60,
   needs: [
     { id: 'food', name: 'Food pack', category: 'food', quantity: 1 },

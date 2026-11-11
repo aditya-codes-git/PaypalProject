@@ -4,8 +4,7 @@ import { ThemeToggle, useTheme } from './Theme';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, themeQuartz, type ColDef } from 'ag-grid-community';
-import { createDemo } from './demo';
-import { money, type Offer, type Plan, type Scenario } from './types';
+import { emptyScenario, money, type Offer, type Plan, type Scenario } from './types';
 import { cloudRequest, fingerprint, type Account, type SavedPlan } from './cloud';
 import { useSavedWorkspace } from './useSavedWorkspace';
 import { ApproveAction, DurableActivity, EvidencePanel, FundingLedger, Purchases, useProcurement } from './Procurement';
@@ -31,7 +30,8 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
   const { theme } = useTheme();
   const confirm = useConfirmation();
   const gridTheme = useMemo(() => themeQuartz.withParams({ accentColor: '#8b78ed', backgroundColor: theme === 'dark' ? '#111114' : '#ffffff', foregroundColor: theme === 'dark' ? '#ededf0' : '#27272a', borderColor: theme === 'dark' ? '#24242b' : '#e9e9ed', headerBackgroundColor: theme === 'dark' ? '#151519' : '#fafafa', fontFamily: 'Geist Variable, sans-serif', fontSize: 16, rowHeight: 62, headerHeight: 52, wrapperBorderRadius: 7 }), [theme]);
-  const [scenario, setScenario] = useState(createDemo);
+  const [scenario, setScenario] = useState(emptyScenario);
+  const [setupEdited, setSetupEdited] = useState(false);
   const [tab, setTab] = useState<Tab>('Overview');
   const [plan, setPlan] = useState<Plan | null>(null);
   const [plannedSnapshot, setPlannedSnapshot] = useState('');
@@ -45,6 +45,7 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
   const eventSequence = useRef(0);
   const workspace = useSavedWorkspace(account, (next, savedPlan, savedScenario) => {
     revision.current += 1;
+    setSetupEdited(false);
     setScenario(next); setPlan(savedPlan); setPlannedSnapshot(savedScenario ? fingerprint(savedScenario) : '');
     setEvents([]); setError(''); setDrawer(false);
   });
@@ -57,7 +58,11 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
   const usable = !!plan && !stale && ['OPTIMAL', 'FEASIBLE'].includes(plan.status);
   const fundName = (id: string) => scenario.funds.find(f => f.id === id)?.name ?? id;
   const needName = (id: string) => scenario.needs.find(n => n.id === id)?.name ?? id;
-  const isDirty = !!account && workspace.dirty(scenario);
+  const settingUp = !scenario.needs.length;
+  const isDirty = setupEdited || (!!account && workspace.dirty(scenario));
+  const canPlan = scenario.funds.some(fund => fund.confirmed);
+  const showFundingHelp = !settingUp && !canPlan;
+
 
   useEffect(() => {
     if (!isDirty) return;
@@ -91,14 +96,27 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
     record(title, body);
   }
 
+  async function saveInputs(next: Scenario) {
+    let applied = next;
+    if (account) {
+      try { applied = (await workspace.save(next)).scenario; }
+      catch { return; }
+    }
+    update(applied, 'Plan inputs updated', 'Needs, supplier offers and funding are ready to review.');
+    setSetupEdited(false);
+    setTab(applied.funds.some(fund => fund.confirmed) ? 'Overview' : 'Funding');
+    window.scrollTo(0, 0);
+  }
+
   async function generate() {
+    if (!canPlan) { setTab('Funding'); return; }
     const input = fingerprint(scenario);
     const requestedRevision = revision.current;
     setBusy(true); setError('');
     try {
       let result: Plan;
       if (account) {
-        const saved = await workspace.save(scenario);
+        const saved = workspace.active && !isDirty ? workspace.active : await workspace.save(scenario);
         const calculation = await cloudRequest<SavedPlan>(account, `/${saved.id}/plans`, 'POST', { expected_revision: saved.revision });
         result = calculation.result;
         workspace.setHistory(previous => [calculation, ...previous].slice(0, 20));
@@ -121,16 +139,11 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
     update({ ...scenario, offers: scenario.offers.map(o => o.id === offer.id ? { ...o, active } : o) }, active ? 'Supplier offer restored' : 'Supplier offer withdrawn', `${offer.supplier} · ${needName(offer.need_id)}. Generate a new plan to use this change.`);
   }
 
-  function reset() {
-    revision.current += 1; setScenario(createDemo()); setPlan(null); setPlannedSnapshot(''); setError(''); setDrawer(false);
-    record('Scenario reset', 'Original fictional offers, funding, and needs restored.');
-  }
-
   async function exitWorkspace() {
-    if (isDirty && !await confirm({
-      title: 'Sign out with unsaved changes?',
-      message: 'Changes since your last save will be lost.',
-      action: 'Discard and sign out',
+    if ((isDirty || (!account && !settingUp)) && !await confirm({
+      title: account ? 'Sign out with unsaved changes?' : 'Leave this guest plan?',
+      message: account ? 'Changes since your last save will be lost.' : 'Sign in to create a saved operation. This guest plan will be cleared.',
+      action: account ? 'Discard and sign out' : 'Continue to sign-in',
     })) return;
     try { await onExit(); }
     catch (err) { setError(err instanceof Error ? err.message : 'Could not sign out. Please try again.'); }
@@ -154,11 +167,11 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
   return <div className="app-shell">
     <aside className="sidebar" inert={drawer || showSetup}>
       <a className="brand" href="#" aria-label="ReliefOps overview" onClick={e => { e.preventDefault(); setTab('Overview'); }}><Brand /></a>
-      <nav aria-label="Workspace navigation">{tabs.map(name => (
+      {!settingUp && <nav aria-label="Workspace navigation">{tabs.map(name => (
         <button key={name} aria-current={tab === name ? 'page' : undefined} className={`nav-item ${tab === name ? 'selected' : ''}`} onClick={() => setTab(name)}>
           <Icon name={pages[name].icon} /><span>{name}</span>
         </button>
-      ))}</nav>
+      ))}</nav>}
     </aside>
 
     <div className="main-shell" inert={drawer || showSetup}>
@@ -171,13 +184,13 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
               message: 'Changes since your last save will be lost.',
               action: 'Discard and switch',
             })) return;
-            if (operationId) void workspace.load(operationId);
+            if (operationId) { await workspace.load(operationId); setTab('Overview'); }
             else { workspace.fresh(); setTab('Overview'); }
           }}>
-            <option value="">{workspace.active ? '+ New operation' : 'New operation'}</option>
+            <option value="">{workspace.active ? '+ New operation' : 'Select an operation'}</option>
             {workspace.operations.map(operation => <option value={operation.id} key={operation.id}>{operation.name}</option>)}
           </select>
-        ) : <strong className="sample-label">Sample workspace</strong>}
+        ) : <strong className="sample-label">Guest workspace</strong>}
         <div className="topbar-right">
           <ThemeToggle />
           <button className="text-button" onClick={exitWorkspace} disabled={locked}>{account ? 'Sign out' : 'Sign in'}</button>
@@ -185,9 +198,23 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
         </div>
       </header>
       <main>
+        {settingUp ? <section aria-label={account ? "Saved operations" : "New operation setup"}>
+          <div className="page-heading"><h1>Start a relief operation</h1></div>
+          <p className="setup-intro">Enter who you need to supply, what each household needs, and what suppliers can deliver.</p>
+          {workspace.error && <div className="error-banner" role="alert">{workspace.error}</div>}
+          <InputEditor scenario={scenario} disabled={locked} setup
+            operationName={account ? workspace.name : undefined}
+            onNameChange={workspace.setName}
+            allowNoFunds={!!account}
+            onEdit={() => setSetupEdited(true)}
+            onApply={saveInputs} />
+        </section> : <>
         <div className="page-heading"><h1>{pages[tab].title}</h1>
-          {tab === 'Overview' && <button className="button planner-button" onClick={generate} disabled={locked}>{busy ? 'Building plan…' : 'Generate purchasing plan'}<Icon name="arrow" size={18} /></button>}
+          {tab === 'Overview' && (canPlan
+            ? <button className="button planner-button" onClick={generate} disabled={locked}>{busy ? 'Building plan…' : 'Generate purchasing plan'}<Icon name="arrow" size={18} /></button>
+            : <button className="button planner-button" onClick={() => setTab('Funding')}>Add funding<Icon name="arrow" size={18} /></button>)}
           {tab === 'Funding' && <button className="button subtle" onClick={() => setTab('Grant documents')}>Review grant documents<Icon name="arrow" size={16} /></button>}
+          {tab === 'Grant documents' && canPlan && <button className="button subtle" onClick={() => setTab('Overview')}>Go to planner<Icon name="arrow" size={16} /></button>}
         </div>
         {account && tab === 'Overview' && <section className="cloud-toolbar" aria-label="Saved operations">
           <div className="cloud-controls">
@@ -210,8 +237,7 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
         </div>}
         {workspace.error && <div className="error-banner" role="alert">{workspace.error}</div>}
         {tab === 'Overview' && <div className="overview-intro">
-          <p>{account ? 'See what you can buy with your funding, supplier stock and delivery deadline.' : 'Plan a flood response with sample data. Sign in to save your own operation.'}</p>
-          {!account && <button className="text-button" onClick={reset} disabled={locked}>Reset sample</button>}
+          <p>See what you can buy with your funding, supplier stock and delivery deadline.</p>
         </div>}
         {error && <div className="error-banner" role="alert">{error}<button onClick={() => setError('')} aria-label="Dismiss error"><Icon name="close" size={16} /></button></div>}
         {stale && (tab === 'Overview' || tab === 'Supplier offers' || tab === 'Funding') && <div className="warning-banner" role="status">Your plan is out of date. Generate a new one with your changes.</div>}
@@ -226,23 +252,32 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
 
           <div className="overview-grid"><section className="card needs-card"><div className="card-heading"><div><h2>Supplies needed</h2></div><button className="text-button" onClick={() => setTab('Plan settings')}>Edit supplies<Icon name="arrow" size={16} /></button></div><div className="needs-list">{scenario.needs.map((need, index) => <div className="need-row" key={need.id}><span className={`need-icon tone-${index}`}><Icon name={index === 0 ? 'box' : index === 1 ? 'leaf' : 'shield'} size={22} /></span><div><strong>{need.name}</strong><small>{need.quantity} per household · {need.category}</small></div><div className="need-quantity"><strong>{need.quantity * scenario.target_kits}</strong><small>units needed</small></div></div>)}</div><div className="scenario-controls"><label>Households<input disabled={locked} aria-label="Households to reach" type="number" min="1" max="100" value={scenario.target_kits} onChange={e => { const value = Number(e.target.value); if (Number.isInteger(value) && value >= 1 && value <= 100) update({ ...scenario, target_kits: value }, 'Needs updated', `Target changed to ${value} complete kits.`); }} /></label><label>Deadline<select disabled={locked} aria-label="Delivery deadline" value={scenario.deadline_days} onChange={e => update({ ...scenario, deadline_days: Number(e.target.value) }, 'Deadline updated', `Delivery window changed to ${e.target.value} days.`)}>{![1, 2, 5].includes(scenario.deadline_days) && <option value={scenario.deadline_days}>{scenario.deadline_days === 0 ? 'Today' : `Within ${scenario.deadline_days} days`}</option>}<option value={1}>Within 1 day</option><option value={2}>Within 2 days</option><option value={5}>Within 5 days</option></select></label></div></section>
 
-          <section className="card"><div className="card-heading"><div><h2>Available funding by source</h2></div><button className="text-button" onClick={() => setTab('Funding')}>Manage funding <Icon name="arrow" size={16} /></button></div><div className="fund-preview">{scenario.funds.map((fund, index) => <div className="fund-preview-item" key={fund.id}><span className={`fund-dot fund-${index}`} /><div><strong>{fund.name}</strong><small>{`Can pay for: ${fund.categories.join(', ')}`}</small></div><strong>{money(available(fund.id, fund.available_cents))}</strong></div>)}</div></section>
+          <section className="card"><div className="card-heading"><div><h2>Available funding by source</h2></div><button className="text-button" onClick={() => setTab('Funding')}>Manage funding <Icon name="arrow" size={16} /></button></div><div className="fund-preview">{!scenario.funds.length && <p>No funding added yet.</p>}{scenario.funds.map((fund, index) => <div className="fund-preview-item" key={fund.id}><span className={`fund-dot fund-${index}`} /><div><strong>{fund.name}</strong><small>{`Can pay for: ${fund.categories.join(', ')}`}</small></div><strong>{money(available(fund.id, fund.available_cents))}</strong></div>)}</div></section>
           </div>
           {plan && <section className="result-strip"><span className="result-icon"><Icon name="check" /></span><div><strong>{stale ? 'Previous plan is out of date' : `${plan.complete_kits} complete kits planned for ${money(plan.total_cost_cents)}`}</strong></div><button className="button subtle" disabled={stale || busy || !usable} onClick={() => setDrawer(true)}>Review plan <Icon name="arrow" size={16} /></button></section>}
         </>}
 
-        {tab === 'Supplier offers' && <section className="card"><div className="card-heading"><div><h2>Available stock and prices</h2><p>Exclude an offer if the supplier can no longer deliver, then generate a new plan.</p></div><button className="button primary" onClick={generate} disabled={locked}>{busy ? 'Calculating…' : 'Generate plan'}<Icon name="arrow" size={16} /></button></div><div className="grid-wrap"><AgGridReact<Offer> theme={gridTheme} rowData={scenario.offers} columnDefs={columns} defaultColDef={{ sortable: true, resizable: true }} getRowId={params => params.data.id} domLayout="autoHeight" /></div><div className="card-footnote">The plan skips offers that arrive after your delivery deadline.</div></section>}
+        {tab === 'Supplier offers' && <section className="card"><div className="card-heading"><div><h2>Available stock and prices</h2><p>Exclude an offer if the supplier can no longer deliver, then generate a new plan.</p></div><button className="button primary" onClick={generate} disabled={locked || !canPlan}>{busy ? 'Calculating…' : 'Generate plan'}<Icon name="arrow" size={16} /></button></div><div className="grid-wrap"><AgGridReact<Offer> theme={gridTheme} rowData={scenario.offers} columnDefs={columns} defaultColDef={{ sortable: true, resizable: true }} getRowId={params => params.data.id} domLayout="autoHeight" /></div><div className="card-footnote">The plan skips offers that arrive after your delivery deadline.</div></section>}
 
-        {tab === 'Funding' && <div className="funds-editor">{scenario.funds.map((fund, index) => <section className="card fund-editor" key={fund.id}><div className="fund-editor-heading"><span className={`need-icon tone-${index}`}><Icon name="fund" /></span><span className="tag">{fund.confirmed ? 'Ready to use' : 'Needs confirmation'}</span></div><h2>{fund.name}</h2><p>Can pay for: {fund.categories.join(', ')}.</p><label>Budget (USD)<input disabled={locked || !!procurement.ledger?.balances[fund.id]} aria-label={`${fund.name} amount`} type="number" min="0" max="1000000" step="0.01" value={(procurement.ledger?.balances[fund.id]?.opening_cents ?? fund.available_cents) / 100} onChange={e => { const amount = Number(e.target.value); if (Number.isFinite(amount) && amount >= 0 && amount <= 1000000) update({ ...scenario, funds: scenario.funds.map(f => f.id === fund.id ? { ...f, available_cents: Math.round(amount * 100) } : f) }, 'Funding balance updated', `${fund.name}: ${money(Math.round(amount * 100))}.`); }} /></label>{hasLedger && <p className="fund-editor-note">{money(available(fund.id, 0))} left to spend</p>}</section>)}<div className="fund-action"><button className="button primary" onClick={generate} disabled={locked}>{busy ? 'Calculating…' : 'Generate plan with these funds'}<Icon name="arrow" size={16} /></button></div></div>}
+        {tab === 'Funding' && showFundingHelp && <section className="card procurement-panel funding-start">
+          <h2>{scenario.funds.length ? 'Confirm your funding' : 'Add money to your plan'}</h2>
+          <p>Tell ReliefOps how much you can spend and what the money can pay for.</p>
+          <div className="action-row">
+            <button className="button primary" onClick={() => setTab('Plan settings')}>{scenario.funds.length ? 'Review funding rules' : 'Enter a budget'}</button>
+            {account && <button className="button subtle" onClick={() => setTab('Grant documents')}>Upload a grant document</button>}
+          </div>
+        </section>}
+        {tab === 'Funding' && scenario.funds.length > 0 && <div className="funds-editor">{scenario.funds.map((fund, index) => <section className="card fund-editor" key={fund.id}><div className="fund-editor-heading"><span className={`need-icon tone-${index}`}><Icon name="fund" /></span><span className="tag">{fund.confirmed ? 'Ready to use' : 'Needs confirmation'}</span></div><h2>{fund.name}</h2><p>Can pay for: {fund.categories.join(', ')}.</p><label>Budget (USD)<input disabled={locked || !!procurement.ledger?.balances[fund.id]} aria-label={`${fund.name} amount`} type="number" min="0" max="1000000" step="0.01" value={(procurement.ledger?.balances[fund.id]?.opening_cents ?? fund.available_cents) / 100} onChange={e => { const amount = Number(e.target.value); if (Number.isFinite(amount) && amount >= 0 && amount <= 1000000) update({ ...scenario, funds: scenario.funds.map(f => f.id === fund.id ? { ...f, available_cents: Math.round(amount * 100) } : f) }, 'Funding balance updated', `${fund.name}: ${money(Math.round(amount * 100))}.`); }} /></label>{hasLedger && <p className="fund-editor-note">{money(available(fund.id, 0))} left to spend</p>}</section>)}<div className="fund-action"><button className="button primary" onClick={generate} disabled={locked || !canPlan}>{busy ? 'Calculating…' : 'Generate plan with these funds'}<Icon name="arrow" size={16} /></button></div></div>}
 
         {tab === 'Activity' && <section className="card"><div className="card-heading"><div><h2>Changes in this session</h2></div></div>{events.length === 0 ? <div className="empty-state"><Icon name="activity" size={32} /><h3>No changes yet</h3><p>Changes and new plans will appear here.</p></div> : <ol className="activity-list">{events.map(event => <li key={event.id}><span className="activity-dot" /><div><strong>{event.title}</strong><p>{event.body}</p></div><time>{event.time}</time></li>)}</ol>}</section>}
 
-        {tab === 'Plan settings' && <InputEditor scenario={scenario} disabled={locked} onApply={next => update(next, 'Operation inputs updated', 'Needs, funding rules and supplier offers changed. Save and calculate a fresh plan.')} />}
+        {tab === 'Plan settings' && <InputEditor scenario={scenario} disabled={locked} allowNoFunds={!!account} onApply={saveInputs} />}
         {tab === 'Purchases' && (account && workspace.active ? <Purchases procurement={procurement} operation={workspace.active} clean={!isDirty} onPlan={() => setTab('Overview')} /> : <section className="card empty-state"><h2>Save an operation to manage purchases</h2><p>Approved items appear here, ready for test checkout.</p><button className="button primary" onClick={account ? () => setTab('Overview') : exitWorkspace}>{account ? 'Go to overview' : 'Sign in'}</button></section>)}
         {tab === 'Grant documents' && (account && workspace.active ? <EvidencePanel procurement={procurement} operation={workspace.active} clean={!isDirty} reload={() => workspace.load(workspace.active!.id)} /> : <section className="card empty-state"><h2>Save an operation to upload a grant</h2><p>Upload a document to find the grant amount and what it can pay for.</p><button className="button primary" onClick={account ? () => setTab('Overview') : exitWorkspace}>{account ? 'Go to overview' : 'Sign in'}</button></section>)}
         {tab === 'Activity' && account && workspace.active && <DurableActivity procurement={procurement} />}
         {tab === 'Funding' && account && workspace.active && !isDirty && <FundingLedger procurement={procurement} operation={workspace.active} />}
         {tab === 'Overview' && account && workspace.history.length > 0 && <section className="card saved-history"><div className="card-heading"><div><h2>Previous plans</h2></div></div>{workspace.history.map(calculation => <button className="history-row" key={calculation.id} onClick={() => { setPlan(calculation.result); setPlannedSnapshot(fingerprint(calculation.scenario)); setDrawer(true); }}><span><strong>{calculation.result.complete_kits} complete kits</strong><small>{new Date(calculation.created_at).toLocaleString()}</small></span><strong>{money(calculation.result.total_cost_cents)}</strong><Icon name="arrow" size={16} /></button>)}</section>}
+        </>}
       </main>
     </div>
 

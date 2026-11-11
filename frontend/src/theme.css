@@ -367,3 +367,6 @@ h1 { font-size: clamp(34px, 3.4vw, 50px); letter-spacing: -.045em; line-height: 
   .card-heading { flex-wrap: wrap; }
   .cloud-controls label { max-width: none; }
 }
+
+.setup-intro { margin: -9px 0 24px; color: var(--muted); max-width: 65ch; }
+.funding-start { margin-bottom: 20px; }

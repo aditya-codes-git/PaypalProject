@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { createDemo } from './demo';
 import { cloudRequest, fingerprint, type Account, type Operation, type OperationSummary, type SavedPlan } from './cloud';
-import type { Plan, Scenario } from './types';
+import { emptyScenario, type Plan, type Scenario } from './types';
 
 export function useSavedWorkspace(account: Account | null, restore: (scenario: Scenario, plan: Plan | null, plannedScenario: Scenario | null) => void) {
   const [operations, setOperations] = useState<OperationSummary[]>([]);
   const [active, setActive] = useState<Operation | null>(null);
-  const [name, setName] = useState('Riverdale flood response');
+  const [name, setName] = useState('');
   const [history, setHistory] = useState<SavedPlan[]>([]);
   const [savedFingerprint, setSavedFingerprint] = useState('');
   const [busy, setBusy] = useState(false);
@@ -57,10 +56,12 @@ export function useSavedWorkspace(account: Account | null, restore: (scenario: S
   }
 
   function fresh() {
-    setActive(null); setName('Untitled operation'); setHistory([]); setSavedFingerprint(''); setError('');
-    restoreRef.current(createDemo(), null, null);
+    setActive(null); setName(''); setHistory([]); setSavedFingerprint(''); setError('');
+    restoreRef.current(emptyScenario(), null, null);
   }
 
   return { operations, active, name, setName, history, setHistory, busy, error, setError, load, save, fresh,
-    dirty: (scenario: Scenario) => fingerprint({ name: name.trim(), scenario }) !== savedFingerprint };
+    dirty: (scenario: Scenario) => active
+      ? fingerprint({ name: name.trim(), scenario }) !== savedFingerprint
+      : !!name.trim() || scenario.needs.length > 0 };
 }

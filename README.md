@@ -37,7 +37,7 @@ The root `.env` is private and Git-ignored. Preserve any existing values. Create
 
 | Configuration | Purpose |
 | --- | --- |
-| No keys | Account-free sample planning |
+| No keys | Account-free planning with your own inputs |
 | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | Sign-in and private operations |
 | `RELIEFOPS_SERVER_KEY` | Scoped financial gateway credential; provision its hash as described in [database setup](database/README.md) |
 | `GROQ_API_KEY`, `GROQ_MODEL` | Funding-evidence extraction |
@@ -50,15 +50,17 @@ The hosted ReliefOps schema and `finance-gateway` Edge Function are installed. A
 
 Google's provider settings live in Supabase, not `.env`. Allow exact app return URLs in Supabase Authentication URL Configuration, including both local hostnames if used. Google Cloud's authorized redirect is the Supabase `/auth/v1/callback` URL. Start and finish login in the same browser and hostname so PKCE can complete. Password access requires an existing confirmed application account; password recovery/email setup is outside this prototype.
 
-## Exercise the demo
+## Run the submission demo
 
-1. Choose **Explore sample workspace**. Generate the seeded plan: 60 complete kits for $1,440. Withdraw Harbor Essentials' blanket offer and recalculate: 60 kits for $1,530. With the emergency reserve at $0, hygiene has no eligible funding and no complete kit can be proposed.
-2. Sign in, name an operation and save it. Use **Operation inputs** to add/edit needs, offers and confirmed funding rules. Apply the form, then save/generate.
-3. Review a current plan and choose **Approve and reserve funds**. **Purchases** now shows durable intents and available/reserved/spent balances. Repeated requests cannot reserve the same approval twice.
-4. Pay one intent with PayPal sandbox. Use a sandbox buyer account, return to the app, then capture its approved payment. If any response is uncertain, use **Reconcile with PayPal** rather than treating it as failure.
-5. Cancel another unsubmitted reservation, withdraw its supplier offer and recalculate. Paid and remaining reserved quantities count toward the operation; new purchases cover only outstanding needs.
-6. In **Funding evidence**, upload synthetic `.txt` or text-PDF terms. Review the exact quotation/page, correct the amount/categories, and explicitly confirm the rule. Manual input remains available if AI is unavailable.
-7. Inspect **Activity** and export the operation/audit from **Purchases**. Keep raw source documents separately; the export intentionally omits their text.
+1. Sign in to start an empty operation. For a short, reproducible walkthrough, enter 10 households, a 1-day delivery window, one food pack per household in the `food` category, and a supplier offering 10 units at $8 with delivery in 1 day. Enter a second offer at $9 with the same stock and delivery to demonstrate replanning.
+2. Save the operation with funding blank. Choose **Upload a grant document** and upload a text file containing: “The fictional Riverdale grant provides USD $100 exclusively for food packs.” Review the source quote, amount and category, then confirm the grant. Alternatively, enter and confirm a budget manually.
+3. Generate the purchasing plan. The $8 offer should cover 10 households for $80. Exclude that offer and generate again. The $9 offer should cover the same households for $90.
+4. Choose **Approve and reserve funds** and confirm. In **Purchases**, select **Pay with PayPal**, approve the order with a separate sandbox buyer, return, and select **Complete payment**. Use **Check PayPal status** if the payment outcome is uncertain.
+5. Confirm the purchase shows **Paid** and the amount moved from reserved to spent. Inspect **Activity** and download the purchase record. The export omits raw source text.
+
+For a quick public check, choose **Start without signing in** and enter the same needs, offers and a confirmed $100 food budget yourself. Guest plans are not saved and do not create purchases.
+
+Before submission, verify the hosted signed-in workflow with a dedicated test account and PayPal sandbox buyer, check judge access in a clean browser, and record a public video under three minutes. In future releases, extend the same workflow with team approvals, supplier order confirmation, delivery tracking and funder reports.
 
 Unmapped fictional suppliers all use the application's default sandbox merchant. Distinct recipients require controlled sandbox merchant mappings; this is not a marketplace onboarding integration. Prices must include all payable unit costs; tax/shipping are not calculated separately. Stock and delivery are reported inputs.
 

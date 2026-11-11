@@ -1,8 +1,9 @@
 import { test, expect, type Page } from '@playwright/test';
+import { startGuestPlan } from './helpers/setup';
 
 async function openSample(page: Page) {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Explore sample workspace' }).click();
+  await startGuestPlan(page);
 }
 
 test('calculate, withdraw a supplier, and replan using the real API', async ({ page }) => {

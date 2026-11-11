@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import { fillOperationSetup } from './setup';
 const operationId = '22222222-2222-4222-8222-222222222222';
 const userId = '11111111-1111-4111-8111-111111111111';
 const user = { id: userId, aud: 'authenticated', role: 'authenticated', email: 'coordinator@example.test', created_at: '2026-11-10T00:00:00Z', app_metadata: { provider: 'email', providers: ['email'] }, user_metadata: {}, identities: [] };
@@ -38,11 +39,16 @@ export async function mockCloud(page: Page) {
   return state;
 }
 
-export async function signIn(page: Page) {
+export async function signIn(page: Page, save = true) {
   await page.goto('/');
   await page.getByLabel('Email address', { exact: true }).fill('coordinator@example.test');
   await page.getByLabel('Password', { exact: true }).fill('test-password');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Saved operations' })).toBeVisible();
+  if (save) {
+    await fillOperationSetup(page, { signedIn: true });
+    await page.getByRole('button', { name: 'Save operation', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Operation overview' })).toBeVisible();
+  }
 }
 

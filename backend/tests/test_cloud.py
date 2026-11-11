@@ -91,6 +91,18 @@ def test_stale_save_and_forged_owner_are_rejected(database, scenario):
     assert response.status_code == 422
 
 
+def test_operation_can_be_saved_before_funding_is_confirmed(database, scenario):
+    client = TestClient(app, headers={"Authorization": "Bearer valid"})
+    scenario["funds"] = []
+    created = client.post("/api/operations", json={"name": "Awaiting grant review", "scenario": scenario})
+    assert created.status_code == 201
+    assert created.json()["scenario"]["funds"] == []
+    plan = client.post(f"/api/operations/{OPERATION}/plans", json={"expected_revision": 1})
+    assert plan.status_code == 422
+    assert plan.json()["detail"] == "Add or confirm funding before building a plan."
+    assert database["plans"] == []
+
+
 def test_inaccessible_operation_returns_not_found(database):
     client = TestClient(app, headers={"Authorization": "Bearer valid"})
     assert client.get("/api/operations/33333333-3333-4333-8333-333333333333").status_code == 404
