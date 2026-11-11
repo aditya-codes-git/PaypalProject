@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cloudRequest, type Account, type Operation } from './cloud';
+import { useConfirmation } from './Confirmation';
 import { money, type Plan } from './types';
 
 type Intent = { id: string; supplier: string; need_id: string; quantity: number; cost_cents: number; status: string; order_id: string | null; capture_id: string | null; approval_url: string | null; merchant_id: string };
@@ -54,15 +55,22 @@ const purchaseStatus: Record<string, string> = {
 
 
 export function ApproveAction({ procurement, plan, operation, disabled, onApproved }: { procurement: Procurement; plan: Plan; operation: Operation | null; disabled: boolean; onApproved: () => void }) {
+  const confirm = useConfirmation();
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   useEffect(() => setRequestId(crypto.randomUUID()), [plan.id]);
-  return <div className="approval-action"><p>Approval sets this money aside. You can pay for each purchase separately.</p>{procurement.error && <p className="error-banner" role="alert">{procurement.error}</p>}<button className="button primary full-width" disabled={disabled || procurement.busy || !operation || !plan.purchases.length} onClick={() => {
-    if (!window.confirm(`Approve these ${plan.purchases.length} purchases and reserve ${money(plan.total_cost_cents)}?`)) return;
+  return <div className="approval-action"><p>Approval sets this money aside. You can pay for each purchase separately.</p>{procurement.error && <p className="error-banner" role="alert">{procurement.error}</p>}<button className="button primary full-width" disabled={disabled || procurement.busy || !operation || !plan.purchases.length} onClick={async () => {
+    const count = plan.purchases.length;
+    if (!await confirm({
+      title: 'Approve this purchasing plan?',
+      message: `Set aside ${money(plan.total_cost_cents)} for ${count} ${count === 1 ? 'purchase' : 'purchases'}. You can pay for them separately.`,
+      action: 'Approve plan',
+    })) return;
     void procurement.action('/approve', { expected_revision: operation!.revision, input_digest: plan.input_digest, request_id: requestId, purchases: plan.purchases }).then(onApproved).catch(() => {});
   }}>{procurement.busy ? 'Reserving funds…' : 'Approve and reserve funds'}</button></div>;
 }
 
 export function Purchases({ procurement, operation, clean, onPlan }: { procurement: Procurement; operation: Operation; clean: boolean; onPlan: () => void }) {
+  const confirm = useConfirmation();
   const ledger = procurement.ledger;
   return <section className="card procurement-panel"><div className="card-heading"><div><h2>Pay for approved items</h2><p>PayPal uses test money in this workspace.</p></div><button className="button subtle" onClick={() => void procurement.refresh()} disabled={procurement.busy}>Refresh status</button></div>
     {!clean && <p className="warning-banner">Save your changes before paying.</p>}
@@ -72,10 +80,22 @@ export function Purchases({ procurement, operation, clean, onPlan }: { procureme
     {ledger && !ledger.purchases.length && <div className="empty-state"><h3>No approved purchases yet</h3><p>Generate a plan and approve it to see what you can pay for here.</p><button className="button subtle" onClick={onPlan}>Go to planner</button></div>}
     {ledger?.purchases.map(p => <article className="purchase-card" key={p.id}><div className="purchase-heading"><div><h3>{p.supplier}</h3><p>{p.quantity} × {operation.scenario.needs.find(n => n.id === p.need_id)?.name ?? p.need_id}</p></div><strong>{money(p.cost_cents)}</strong></div><p><span className="tag">{purchaseStatus[p.status] ?? p.status.replaceAll('_', ' ')}</span></p>
     {p.order_id && <details className="technical-details"><summary>PayPal details</summary><small className="provider-reference">Test recipient: {p.merchant_id ? 'Configured supplier account' : 'Default test account'}<br />Order: {p.order_id}{p.capture_id && <><br />Payment: {p.capture_id}</>}</small></details>}<div className="action-row">
-      {p.status === 'reserved' && <><button className="button primary" disabled={!clean || procurement.busy} onClick={() => void procurement.action(`/purchases/${p.id}/checkout`).then(result => { if (result.approval_url) window.location.assign(result.approval_url); }).catch(() => {})}>Pay with PayPal</button><button className="button subtle" disabled={procurement.busy} onClick={() => { if (window.confirm('Cancel this purchase and make the reserved funds available again?')) void procurement.action(`/purchases/${p.id}/cancel`).catch(() => {}); }}>Cancel purchase</button></>}
+      {p.status === 'reserved' && <><button className="button primary" disabled={!clean || procurement.busy} onClick={() => void procurement.action(`/purchases/${p.id}/checkout`).then(result => { if (result.approval_url) window.location.assign(result.approval_url); }).catch(() => {})}>Pay with PayPal</button><button className="button subtle" disabled={procurement.busy} onClick={async () => {
+        if (await confirm({
+          title: 'Cancel this purchase?',
+          message: `${money(p.cost_cents)} will be available to spend again.`,
+          action: 'Cancel purchase',
+        })) void procurement.action(`/purchases/${p.id}/cancel`).catch(() => {});
+      }}>Cancel purchase</button></>}
       {p.status === 'awaiting_approval' && <>{p.approval_url && <a className="button subtle" href={p.approval_url} rel="noreferrer">Continue in PayPal</a>}<button className="button primary" disabled={!clean || procurement.busy} onClick={() => void procurement.action(`/purchases/${p.id}/capture`).catch(() => {})}>Complete payment</button></>}
       {!['reserved', 'cancelled', 'failed', 'refunded'].includes(p.status) && <button className="button subtle" disabled={procurement.busy} onClick={() => void procurement.action(`/purchases/${p.id}/reconcile`).catch(() => {})}>Check PayPal status</button>}
-      {p.status === 'paid' && <button className="button subtle" disabled={procurement.busy} onClick={() => { if (window.confirm('Request a full sandbox refund? Funding remains spent until the refund is confirmed.')) void procurement.action(`/purchases/${p.id}/refund`).catch(() => {}); }}>Request full refund</button>}
+      {p.status === 'paid' && <button className="button subtle" disabled={procurement.busy} onClick={async () => {
+        if (await confirm({
+          title: 'Request a full refund?',
+          message: 'PayPal will refund this test payment. The funds become available when PayPal confirms the refund.',
+          action: 'Request refund',
+        })) void procurement.action(`/purchases/${p.id}/refund`).catch(() => {});
+      }}>Request full refund</button>}
     </div></article>)}
     {ledger && <button className="button subtle" onClick={() => download(operation, ledger)}>Download purchase record</button>}
   </section>;
@@ -93,16 +113,25 @@ export function DurableActivity({ procurement }: { procurement: Procurement }) {
 }
 
 export function EvidencePanel({ procurement, operation, clean, reload }: { procurement: Procurement; operation: Operation; clean: boolean; reload: () => Promise<void> }) {
+  const confirm = useConfirmation();
   const [localError, setLocalError] = useState('');
   const [loadingFile, setLoadingFile] = useState(false);
   return <section className="card procurement-panel"><div className="card-heading"><div><h2>Upload a grant document</h2><p>AI suggests the grant amount and what it can pay for. Review the quoted text before adding the grant to your funding.</p></div></div><div className="evidence-upload"><label>Choose a grant file<input type="file" accept=".txt,.pdf" disabled={!clean || procurement.busy || loadingFile} onChange={async e => {
-    const file = e.target.files?.[0]; if (!file) return; setLocalError('');
+    const input = e.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    input.value = '';
+    setLocalError('');
     if (file.size > 2_000_000) { setLocalError('Choose a document smaller than 2 MB.'); return; }
-    if (!window.confirm('Send the text in this file to Groq to find the grant terms? Use a sample document for testing.')) { e.target.value = ''; return; }
+    if (!await confirm({
+      title: 'Analyze this grant document?',
+      message: 'ReliefOps sends the file’s text to Groq to find the grant terms. Use a sample document for testing.',
+      action: 'Analyze document',
+    })) return;
     setLoadingFile(true);
     try { const reader = new FileReader(); const content = await new Promise<string>((resolve, reject) => { reader.onload = () => resolve(String(reader.result).split(',')[1]); reader.onerror = reject; reader.readAsDataURL(file); }); await procurement.action('/documents', { filename: file.name, content_base64: content }); }
     catch (err) { setLocalError(err instanceof Error ? err.message : 'Could not read the file.'); }
-    finally { setLoadingFile(false); e.target.value = ''; }
+    finally { setLoadingFile(false); }
   }} /></label><p>Choose a .txt file or a PDF with selectable text, up to 2 MB and 20 pages.</p>{!clean && <p>Save your changes before uploading or confirming a grant.</p>}{(loadingFile || procurement.busy) && <p role="status">Working on your document…</p>}</div>
     {(localError || procurement.error) && <div className="error-banner" role="alert">{localError || procurement.error}</div>}
     {procurement.ledger?.documents.map(document => <article className="evidence-document" key={document.id}><h3>{document.filename}</h3><details className="technical-details"><summary>AI extraction details</summary><small>{document.metadata.model} · {document.metadata.usage.total_tokens ?? '—'} tokens · Document ID {document.hash.slice(0, 12)}</small></details>{document.proposals.warnings.map((w, i) => <p className="warning-banner" key={i}>{w}</p>)}{!document.proposals.funds.length && <p>No grant terms were found. You can add funding in Plan settings.</p>}{document.proposals.funds.map((proposal, index) => <Proposal key={index} proposal={proposal} document={document} index={index} procurement={procurement} operation={operation} clean={clean} reload={reload} />)}</article>)}
@@ -119,8 +148,19 @@ function Proposal({ proposal, document, index, procurement, operation, clean, re
 }
 
 export function FundingLedger({ procurement, operation }: { procurement: Procurement; operation: Operation }) {
+  const confirm = useConfirmation();
   const [fund, setFund] = useState(operation.scenario.funds[0]?.id ?? '');
   const [amount, setAmount] = useState(''); const [reason, setReason] = useState('');
   if (!procurement.ledger || !Object.keys(procurement.ledger.balances).length) return null;
-  return <section className="card procurement-panel"><h2>Change a budget</h2><p>Enter the new total, including money already set aside or spent.</p><form className="input-grid" onSubmit={e => { e.preventDefault(); if (window.confirm('Record this opening allocation adjustment in the saved financial history?')) void procurement.action('/funding', { expected_revision: operation.revision, fund_id: fund, opening_cents: Math.round(Number(amount) * 100), reason }).then(() => { setReason(''); setAmount(''); }).catch(() => {}); }}><label>Funding source<select value={fund} onChange={e => setFund(e.target.value)}>{operation.scenario.funds.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label><label>New total budget (USD)<input type="number" required min="0" max="1000000" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} /></label><label>Reason<input required minLength={5} maxLength={300} value={reason} onChange={e => setReason(e.target.value)} /></label><button className="button subtle" disabled={procurement.busy}>Update budget</button></form></section>;
+  return <section className="card procurement-panel"><h2>Change a budget</h2><p>Enter the new total, including money already set aside or spent.</p><form className="input-grid" onSubmit={async e => {
+    e.preventDefault();
+    const openingCents = Math.round(Number(amount) * 100);
+    if (!await confirm({
+      title: 'Update this budget?',
+      message: `Set the total budget to ${money(openingCents)}. This change will appear in Activity.`,
+      action: 'Save budget',
+    })) return;
+    void procurement.action('/funding', { expected_revision: operation.revision, fund_id: fund, opening_cents: openingCents, reason })
+      .then(() => { setReason(''); setAmount(''); }).catch(() => {});
+  }}><label>Funding source<select value={fund} onChange={e => setFund(e.target.value)}>{operation.scenario.funds.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label><label>New total budget (USD)<input type="number" required min="0" max="1000000" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} /></label><label>Reason<input required minLength={5} maxLength={300} value={reason} onChange={e => setReason(e.target.value)} /></label><button className="button subtle" disabled={procurement.busy}>Update budget</button></form></section>;
 }

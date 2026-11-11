@@ -15,8 +15,8 @@ test('sign in, save, calculate, refresh, restore, and sign out', async ({ page }
   await expect(page.getByRole('heading', { name: 'Previous plans' })).toBeVisible();
   expect(state.plans).toHaveLength(1);
   await page.reload();
-  page.on('dialog', dialog => dialog.accept());
   await page.getByLabel('Saved operation', { exact: true }).selectOption(operationId);
+  await page.getByRole('dialog', { name: 'Switch operations?' }).getByRole('button', { name: 'Discard and switch' }).click();
   // The freshly opened draft is intentionally not auto-saved or silently restored.
   // Selecting a saved operation asks before replacing that draft.
   await expect(page.getByLabel('Households to reach')).toHaveValue('55');
@@ -54,12 +54,13 @@ test('sign-out protects unsaved edits and reports revocation failures', async ({
   await page.getByRole('button', { name: 'Save operation', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Saved');
   await page.getByLabel('Households to reach').fill('43');
-  page.once('dialog', dialog => dialog.dismiss());
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Sign out with unsaved changes?' });
+  await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.getByLabel('Households to reach')).toHaveValue('43');
   state.signoutFailure = true;
-  page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await confirmation.getByRole('button', { name: 'Discard and sign out' }).click();
   await expect(page.getByRole('alert')).toContainText('Signed out on this device');
   await expect(page.getByRole('heading', { name: 'Sign in to ReliefOps' })).toBeVisible();
   await expect(page.getByLabel('Households to reach')).toHaveCount(0);

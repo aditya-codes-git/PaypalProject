@@ -338,6 +338,21 @@ h1 { font-size: clamp(34px, 3.4vw, 50px); letter-spacing: -.045em; line-height: 
 .purchase-card .tag { font-size: 14px; }
 .drawer-header h2 { font-size: clamp(25px, 3vw, 32px); line-height: 1.2; }
 
+.confirmation-dialog {
+  width: min(460px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 24px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.confirmation-dialog::backdrop { background: #10101899; }
+.confirmation-dialog h2 { font-size: 24px; line-height: 1.2; }
+.confirmation-dialog p { color: var(--muted); margin: 12px 0 24px; }
+.confirmation-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+
 @media (max-width: 800px) {
   .app-shell { display: block; }
   .sidebar { width: 100%; position: relative; inset: auto; padding: 15px 14px 9px; border-right: 0; border-bottom: 1px solid var(--border); }

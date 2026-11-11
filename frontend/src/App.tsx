@@ -10,6 +10,7 @@ import { cloudRequest, fingerprint, type Account, type SavedPlan } from './cloud
 import { useSavedWorkspace } from './useSavedWorkspace';
 import { ApproveAction, DurableActivity, EvidencePanel, FundingLedger, Purchases, useProcurement } from './Procurement';
 import { InputEditor } from './InputEditor';
+import { useConfirmation } from './Confirmation';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 const pages = {
@@ -28,6 +29,7 @@ type Integrations = Record<string, { configured: boolean; implemented: boolean }
 
 export function App({ account = null, onExit = () => {} }: { account?: Account | null; onExit?: () => void | Promise<void> }) {
   const { theme } = useTheme();
+  const confirm = useConfirmation();
   const gridTheme = useMemo(() => themeQuartz.withParams({ accentColor: '#8b78ed', backgroundColor: theme === 'dark' ? '#111114' : '#ffffff', foregroundColor: theme === 'dark' ? '#ededf0' : '#27272a', borderColor: theme === 'dark' ? '#24242b' : '#e9e9ed', headerBackgroundColor: theme === 'dark' ? '#151519' : '#fafafa', fontFamily: 'Geist Variable, sans-serif', fontSize: 16, rowHeight: 62, headerHeight: 52, wrapperBorderRadius: 7 }), [theme]);
   const [scenario, setScenario] = useState(createDemo);
   const [tab, setTab] = useState<Tab>('Overview');
@@ -120,13 +122,16 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
   }
 
   function reset() {
-    if (isDirty && !window.confirm('Discard unsaved edits and reset this scenario?')) return;
     revision.current += 1; setScenario(createDemo()); setPlan(null); setPlannedSnapshot(''); setError(''); setDrawer(false);
     record('Scenario reset', 'Original fictional offers, funding, and needs restored.');
   }
 
   async function exitWorkspace() {
-    if (account && workspace.dirty(scenario) && !window.confirm('Sign out and discard unsaved operation edits?')) return;
+    if (isDirty && !await confirm({
+      title: 'Sign out with unsaved changes?',
+      message: 'Changes since your last save will be lost.',
+      action: 'Discard and sign out',
+    })) return;
     try { await onExit(); }
     catch (err) { setError(err instanceof Error ? err.message : 'Could not sign out. Please try again.'); }
   }
@@ -159,9 +164,14 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
     <div className="main-shell" inert={drawer || showSetup}>
       <header className="topbar">
         {account ? (
-          <select className="operation-switcher" aria-label="Saved operation" value={workspace.active?.id ?? ''} disabled={locked} onChange={event => {
-            if (isDirty && !window.confirm('Discard unsaved changes and switch operations?')) return;
-            if (event.target.value) void workspace.load(event.target.value);
+          <select className="operation-switcher" aria-label="Saved operation" value={workspace.active?.id ?? ''} disabled={locked} onChange={async event => {
+            const operationId = event.currentTarget.value;
+            if (isDirty && !await confirm({
+              title: 'Switch operations?',
+              message: 'Changes since your last save will be lost.',
+              action: 'Discard and switch',
+            })) return;
+            if (operationId) void workspace.load(operationId);
             else { workspace.fresh(); setTab('Overview'); }
           }}>
             <option value="">{workspace.active ? '+ New operation' : 'New operation'}</option>
@@ -183,8 +193,13 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
           <div className="cloud-controls">
             <label>Operation name<input maxLength={100} value={workspace.name} disabled={locked} onChange={event => workspace.setName(event.target.value)} /></label>
             <button className="button primary" disabled={locked || !workspace.name.trim()} onClick={() => { void workspace.save(scenario).catch(() => {}); }}>{workspace.busy ? 'Saving…' : 'Save operation'}</button>
-            {workspace.active && isDirty && <button className="text-button" disabled={locked} onClick={() => {
-              if (window.confirm('Discard changes since your last save?')) void workspace.load(workspace.active!.id);
+            {workspace.active && isDirty && <button className="text-button" disabled={locked} onClick={async () => {
+              const operationId = workspace.active!.id;
+              if (await confirm({
+                title: 'Discard unsaved changes?',
+                message: 'This operation will go back to its last saved version.',
+                action: 'Discard changes',
+              })) void workspace.load(operationId);
             }}>Discard changes</button>}
             {workspace.active && <span className="save-status" role="status">{isDirty ? 'Unsaved changes' : 'Saved'}</span>}
           </div>
@@ -253,6 +268,7 @@ function ModalKeyboard({ close, open }: { close: () => void; open: boolean }) {
     const focusable = () => [...dialog.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href], [tabindex="0"]')];
     focusable()[0]?.focus();
     function handle(event: KeyboardEvent) {
+      if (document.querySelector('dialog:modal')) return;
       if (event.key === 'Escape') closeRef.current();
       if (event.key !== 'Tab') return;
       const elements = focusable();

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useConfirmation } from './Confirmation';
 import type { Scenario } from './types';
 
 type Props = { scenario: Scenario; onApply: (scenario: Scenario) => void; disabled: boolean };
@@ -7,13 +8,18 @@ const numeric = (value: string) => value === '' ? Number.NaN : Number(value);
 const display = (value: number) => Number.isFinite(value) ? value : '';
 
 export function InputEditor({ scenario, onApply, disabled }: Props) {
+  const confirm = useConfirmation();
   const [draft, setDraft] = useState<Scenario>(() => structuredClone(scenario));
   const [error, setError] = useState('');
   const [applied, setApplied] = useState(false);
   useEffect(() => { setDraft(structuredClone(scenario)); setError(''); setApplied(false); }, [scenario]);
   function edit(change: Partial<Scenario>) { setDraft(current => ({ ...current, ...change })); setError(''); setApplied(false); }
-  function removeNeed(id: string) {
-    if (draft.offers.some(offer => offer.need_id === id) && !window.confirm('Remove this supply type and its associated offers from the draft?')) return;
+  async function removeNeed(id: string) {
+    if (draft.offers.some(offer => offer.need_id === id) && !await confirm({
+      title: 'Remove this supply?',
+      message: 'This also removes its supplier offers from your draft.',
+      action: 'Remove supply and offers',
+    })) return;
     edit({ needs: draft.needs.filter(need => need.id !== id), offers: draft.offers.filter(offer => offer.need_id !== id) });
   }
   function apply() {
