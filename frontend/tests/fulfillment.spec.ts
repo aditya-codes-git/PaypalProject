@@ -1,14 +1,21 @@
 import { expect, test } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import { mockCloud, signIn } from './helpers/cloud';
 
-test('records a short delivery and downloads the linked funding report', async ({ page }) => {
+test('records a short delivery and downloads purchase and funding records', async ({ page }, testInfo) => {
   const state = await mockCloud(page);
   const at = '2026-11-11T18:00:00Z';
   const purchase = { id: 'purchase', supplier: 'Riverbend Supplies', need_id: '', quantity: 10, cost_cents: 8000,
     status: 'paid', order_id: 'ORDER', capture_id: 'CAPTURE', approval_url: null, merchant_id: '',
+    supply_name: 'Food pack', allocations: [{ fund_id: 'grant', amount_cents: 8000 }],
     supplier_confirmation: null as Record<string, string> | null, receipts: [] as Record<string, unknown>[], delivery_closed: false };
   await page.route('**/api/operations/*/finance', route => route.fulfill({
-    json: { balances: {}, documents: [], events: [], purchases: [{ ...purchase, need_id: state.operation?.scenario.needs[0]?.id }] },
+    json: {
+      balances: { grant: { opening_cents: 10000, reserved_cents: 0, spent_cents: 8000, available_cents: 2000 } },
+      documents: [],
+      events: Array.from({ length: 28 }, (_, i) => ({ id: String(i), at, message: `Purchase event ${i + 1}` })),
+      purchases: [{ ...purchase, need_id: state.operation?.scenario.needs[0]?.id }],
+    },
   }));
   await page.route('**/api/operations/*/purchases/*/supplier-confirmation', route => {
     purchase.supplier_confirmation = route.request().postDataJSON();
@@ -45,6 +52,13 @@ test('records a short delivery and downloads the linked funding report', async (
   await page.getByRole('button', { name: 'Record delivery' }).click();
   await page.getByRole('dialog', { name: 'Close this delivery short?' }).getByRole('button', { name: 'Close delivery' }).click();
   await expect(page.getByText('8 of 10 units received · Delivery closed')).toBeVisible();
+  const recordDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download purchase record (PDF)', exact: true }).click();
+  const record = await recordDownload;
+  expect(record.suggestedFilename()).toBe(`reliefops-purchase-record-${state.operation.id}.pdf`);
+  const recordPath = testInfo.outputPath('purchase-record.pdf');
+  await record.saveAs(recordPath);
+  expect((await readFile(recordPath)).subarray(0, 5).toString()).toBe('%PDF-');
   await page.getByRole('button', { name: 'Reports', exact: true }).click();
   await expect(page.getByText('grant.txt · Page 1')).toBeVisible();
   await expect(page.getByText('$100 budget · $0 reserved · $80 spent')).toBeVisible();

@@ -4,9 +4,9 @@ import { useConfirmation } from './Confirmation';
 import { PurchaseDelivery, type Delivery } from './Fulfillment';
 import { money, type Plan } from './types';
 
-type Intent = Delivery & { id: string; supplier: string; need_id: string; quantity: number; cost_cents: number; status: string; order_id: string | null; capture_id: string | null; approval_url: string | null; merchant_id: string; buyer_approved?: boolean };
+type Intent = Delivery & { id: string; supplier: string; need_id: string; supply_name?: string; quantity: number; cost_cents: number; status: string; order_id: string | null; capture_id: string | null; refund_id?: string | null; approval_url: string | null; merchant_id: string; buyer_approved?: boolean; allocations?: { fund_id: string; amount_cents: number }[] };
 type Evidence = { id: string; filename: string; hash: string; confirmed: number[]; pages: string[]; metadata: { model: string; usage: { total_tokens?: number } }; proposals: { warnings: string[]; funds: { name: string; amount_cents: number | null; categories: string[]; quote: string; page: number; requires_review: boolean; warnings: string[] }[] } };
-type Ledger = { version?: number; purchases: Intent[]; events: { id: string; at: string; actor: string; kind: string; message: string }[]; documents: Evidence[]; balances: Record<string, { opening_cents: number; reserved_cents: number; spent_cents: number; available_cents: number }> };
+export type Ledger = { version?: number; purchases: Intent[]; events: { id: string; at: string; actor: string; kind: string; message: string }[]; documents: Evidence[]; balances: Record<string, { opening_cents: number; reserved_cents: number; spent_cents: number; available_cents: number }> };
 
 export function useProcurement(account: Account | null, operation: Operation | null, refreshKey: number) {
   const [ledger, setLedger] = useState<Ledger | null>(null);
@@ -54,6 +54,9 @@ const purchaseStatus: Record<string, string> = {
   refunded: 'Refunded',
 };
 
+function purchaseStatusLabel(status: string) {
+  return purchaseStatus[status] ?? status.replaceAll('_', ' ');
+}
 
 export function ApproveAction({ procurement, plan, operation, disabled, onApproved }: { procurement: Procurement; plan: Plan; operation: Operation | null; disabled: boolean; onApproved: () => void }) {
   const confirm = useConfirmation();
@@ -75,13 +78,30 @@ export function Purchases({ procurement, operation, clean, onPlan, onStatusCheck
 }) {
   const confirm = useConfirmation();
   const ledger = procurement.ledger;
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
+
+  async function downloadRecord() {
+    if (!ledger) return;
+    setExporting(true);
+    setExportError('');
+    try {
+      const { savePurchaseRecord } = await import('./PurchaseRecord');
+      savePurchaseRecord(operation, ledger, purchaseStatusLabel);
+    } catch {
+      setExportError('Could not download the purchase record. Try again.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return <section className="card procurement-panel"><div className="card-heading"><div><h2>Pay for approved items</h2><p>PayPal uses test money in this workspace.</p></div><button className="button subtle" onClick={() => void procurement.refresh()} disabled={procurement.busy}>Refresh status</button></div>
     {!clean && <p className="warning-banner">Save your changes before paying.</p>}
     {procurement.error && <div className="error-banner" role="alert">{procurement.error}</div>}
     {ledger && <div className="balance-grid">{Object.entries(ledger.balances).map(([id, b]) => <article key={id}><strong>{operation.scenario.funds.find(f => f.id === id)?.name ?? id}</strong><span>{money(b.available_cents)} available</span><small>{money(b.reserved_cents)} reserved · {money(b.spent_cents)} spent</small></article>)}</div>}
     {!ledger && !procurement.error && <p role="status">Loading purchases…</p>}
     {ledger && !ledger.purchases.length && <div className="empty-state"><h3>No approved purchases yet</h3><p>Generate a plan and approve it to see what you can pay for here.</p><button className="button subtle" onClick={onPlan}>Go to planner</button></div>}
-    {ledger?.purchases.map(p => <article className="purchase-card" key={p.id}><div className="purchase-heading"><div><h3>{p.supplier}</h3><p>{p.quantity} × {operation.scenario.needs.find(n => n.id === p.need_id)?.name ?? p.need_id}</p></div><strong>{money(p.cost_cents)}</strong></div><p><span className="tag">{purchaseStatus[p.status] ?? p.status.replaceAll('_', ' ')}</span></p>
+    {ledger?.purchases.map(p => <article className="purchase-card" key={p.id}><div className="purchase-heading"><div><h3>{p.supplier}</h3><p>{p.quantity} × {operation.scenario.needs.find(n => n.id === p.need_id)?.name ?? p.need_id}</p></div><strong>{money(p.cost_cents)}</strong></div><p><span className="tag">{purchaseStatusLabel(p.status)}</span></p>
     {p.order_id && <details className="technical-details"><summary>PayPal details</summary><small className="provider-reference">Test recipient: {p.merchant_id ? 'Configured supplier account' : 'Default test account'}<br />Order: {p.order_id}{p.capture_id && <><br />Payment: {p.capture_id}</>}</small></details>}<div className="action-row">
       {p.status === 'reserved' && <><button className="button primary" disabled={!clean || procurement.busy} onClick={() => void procurement.action(`/purchases/${p.id}/checkout`).then(result => { if (result.approval_url) window.location.assign(result.approval_url); }).catch(() => {})}>Pay with PayPal</button><button className="button subtle" disabled={procurement.busy} onClick={async () => {
         if (await confirm({
@@ -107,15 +127,9 @@ export function Purchases({ procurement, operation, clean, onPlan, onStatusCheck
         })) void procurement.action(`/purchases/${p.id}/refund`).catch(() => {});
       }}>Request full refund</button>}
     </div><PurchaseDelivery purchase={p} busy={procurement.busy} submit={(path, body) => procurement.action(`/purchases/${p.id}/${path}`, body)} /></article>)}
-    {ledger && <button className="button subtle" onClick={() => download(operation, ledger)}>Download purchase record</button>}
+    {exportError && <p className="error-banner" role="alert">{exportError}</p>}
+    {ledger && <button className="button subtle" disabled={exporting || procurement.busy} onClick={() => void downloadRecord()}>{exporting ? 'Preparing PDF…' : 'Download purchase record (PDF)'}</button>}
   </section>;
-}
-
-function download(operation: Operation, ledger: Ledger) {
-  // Source text is private and intentionally omitted from the purchase/audit export.
-  const { documents, ...finance } = ledger;
-  const blob = new Blob([JSON.stringify({ schema_version: 1, operation, finance, evidence: documents.map(d => ({ id: d.id, filename: d.filename, hash: d.hash, confirmed: d.confirmed, metadata: d.metadata })) }, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `reliefops-${operation.id}.json`; link.click(); URL.revokeObjectURL(url);
 }
 
 export function DurableActivity({ procurement }: { procurement: Procurement }) {
