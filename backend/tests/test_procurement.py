@@ -291,6 +291,36 @@ def test_capture_timeout_retains_reservation_and_reconciles_success(workspace, m
     assert payments.capture(w.id,p["id"],w.session)["status"] == "paid"
 
 
+def test_paypal_return_matches_order_and_captures_only_once(workspace, monkeypatch):
+    w = workspace
+    p = approved(w)
+    calls = []
+
+    def provider(self, method, path, payload=None, request_id=None):
+        calls.append((method, path, request_id))
+        if path.endswith("/capture"):
+            return order(p, "COMPLETED", "COMPLETED")
+        return order(p, "APPROVED" if method == "GET" else "CREATED")
+
+    monkeypatch.setattr(payments.PayPal, "request", provider)
+    payments.checkout(w.id, p["id"], w.session)
+    monkeypatch.setitem(app.dependency_overrides, authenticated, lambda: w.session)
+    client = TestClient(app)
+    path = f"/api/operations/{w.id}/purchases/{p['id']}/capture"
+    calls.clear()
+    assert client.post(path, json={"order_id": "OTHER"}).status_code == 409
+    assert calls == []
+    response = client.post(path, json={"order_id": "ORDER"})
+    assert response.status_code == 200 and response.json()["status"] == "paid"
+    assert client.post(path, json={"order_id": "ORDER"}).json()["status"] == "paid"
+    assert calls == [
+        ("GET", "/v2/checkout/orders/ORDER", None),
+        ("POST", "/v2/checkout/orders/ORDER/capture", payments.stable_id(p, "capture")),
+    ]
+    state = finance.read(w.id, w.owner)["state"]
+    assert sum(b["spent_cents"] for b in finance.balances(state).values()) == p["cost_cents"]
+
+
 def test_stale_order_cannot_reopen_active_capture(workspace, monkeypatch):
     w = workspace
     p = approved(w)

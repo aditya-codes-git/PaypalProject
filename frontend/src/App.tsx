@@ -39,17 +39,19 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
   const [plannedSnapshot, setPlannedSnapshot] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [paymentNotice, setPaymentNotice] = useState('');
   const [drawer, setDrawer] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
   const [integrations, setIntegrations] = useState<Integrations | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const revision = useRef(0);
   const eventSequence = useRef(0);
+  const handlingPaymentReturn = useRef(false);
   const workspace = useSavedWorkspace(account, (next, savedPlan, savedScenario) => {
     revision.current += 1;
     setSetupEdited(false);
     setScenario(next); setPlan(savedPlan); setPlannedSnapshot(savedScenario ? fingerprint(savedScenario) : '');
-    setEvents([]); setError(''); setDrawer(false);
+    setEvents([]); setError(''); setPaymentNotice(''); setDrawer(false);
   });
   const procurement = useProcurement(account, workspace.active, workspace.history.length);
   const locked = busy || workspace.busy || procurement.busy;
@@ -74,16 +76,44 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
   }, [isDirty]);
 
   useEffect(() => {
-    if (!account) return;
+    if (!account || handlingPaymentReturn.current) return;
     const params = new URLSearchParams(window.location.search);
     const operation = params.get('operation');
-    if (!operation || !params.has('payment')) return;
-    const approved = params.get('payment') === 'approved';
-    window.history.replaceState(null, '', window.location.pathname);
-    void workspace.load(operation).then(() => {
-      setTab('Purchases');
-      setError(approved ? 'The buyer returned from PayPal. Select Complete payment to finish the test purchase.' : 'PayPal checkout was closed. Check PayPal status before trying again.');
-    });
+    const purchase = params.get('purchase');
+    const order = params.get('token');
+    const payment = params.get('payment');
+    const uuid = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
+    if (!operation || !uuid.test(operation) || (payment !== 'approved' && payment !== 'cancelled')) return;
+    handlingPaymentReturn.current = true;
+    setBusy(true);
+    setTab('Purchases');
+    setPaymentNotice(payment === 'approved' ? 'Confirming payment with PayPal…' : 'Opening purchases…');
+
+    const finishPayment = async () => {
+      let message = 'PayPal checkout was closed. Check PayPal status if you already approved.';
+      if (payment === 'approved') {
+        message = 'Payment could not be confirmed. Use Check PayPal status before trying again.';
+        if (purchase && uuid.test(purchase) && order) {
+          try {
+            const result = await cloudRequest<{ status: string }>(account,
+              `/${operation}/purchases/${purchase}/capture`, 'POST', { order_id: order });
+            if (result.status === 'paid') message = 'Payment confirmed.';
+            else if (result.status === 'refunded') message = 'PayPal reports this payment was refunded.';
+            else if (result.status === 'failed') message = 'PayPal reports this payment failed.';
+            else message = 'Payment confirmation is pending. Use Check PayPal status for updates.';
+          } catch {
+            // A failed response can follow a successful capture. Reconcile before retrying.
+          }
+        }
+      }
+      await workspace.load(operation);
+      setPaymentNotice(message);
+      for (const key of ['operation', 'purchase', 'payment', 'token', 'PayerID']) params.delete(key);
+      const query = params.toString();
+      window.history.replaceState(window.history.state, '', window.location.pathname + (query ? `?${query}` : '') + window.location.hash);
+      setBusy(false);
+    };
+    void finishPayment();
   }, [account?.session.user.id]);
 
   function record(title: string, body: string) {
@@ -200,7 +230,8 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
         </div>
       </header>
       <main>
-        {settingUp ? <section aria-label={account ? "Saved operations" : "New operation setup"}>
+        {tab === 'Purchases' && paymentNotice && <p className="payment-notice" role="status">{paymentNotice}</p>}
+        {settingUp ? (busy && paymentNotice ? null : <section aria-label={account ? "Saved operations" : "New operation setup"}>
           <div className="page-heading"><h1>Start a relief operation</h1></div>
           <p className="setup-intro">Enter who you need to supply, what each household needs, and what suppliers can deliver.</p>
           {workspace.error && <div className="error-banner" role="alert">{workspace.error}</div>}
@@ -210,7 +241,7 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
             allowNoFunds={!!account}
             onEdit={() => setSetupEdited(true)}
             onApply={saveInputs} />
-        </section> : <>
+        </section>) : <>
         <div className="page-heading"><h1>{pages[tab].title}</h1>
           {tab === 'Overview' && (canPlan
             ? <button className="button planner-button" onClick={generate} disabled={locked}>{busy ? 'Building plan…' : 'Generate purchasing plan'}<Icon name="arrow" size={18} /></button>
@@ -274,7 +305,7 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
         {tab === 'Activity' && <section className="card"><div className="card-heading"><div><h2>Changes in this session</h2></div></div>{events.length === 0 ? <div className="empty-state"><Icon name="activity" size={32} /><h3>No changes yet</h3><p>Changes and new plans will appear here.</p></div> : <ol className="activity-list">{events.map(event => <li key={event.id}><span className="activity-dot" /><div><strong>{event.title}</strong><p>{event.body}</p></div><time>{event.time}</time></li>)}</ol>}</section>}
 
         {tab === 'Plan settings' && <InputEditor scenario={scenario} disabled={locked} allowNoFunds={!!account} onApply={saveInputs} />}
-        {tab === 'Purchases' && (account && workspace.active ? <Purchases procurement={procurement} operation={workspace.active} clean={!isDirty} onPlan={() => setTab('Overview')} /> : <section className="card empty-state"><h2>Save an operation to manage purchases</h2><p>Approved items appear here, ready for test checkout.</p><button className="button primary" onClick={account ? () => setTab('Overview') : exitWorkspace}>{account ? 'Go to overview' : 'Sign in'}</button></section>)}
+        {tab === 'Purchases' && (account && workspace.active ? <Purchases procurement={procurement} operation={workspace.active} clean={!isDirty} onPlan={() => setTab('Overview')} onStatusCheck={() => setPaymentNotice('')} /> : <section className="card empty-state"><h2>Save an operation to manage purchases</h2><p>Approved items appear here, ready for test checkout.</p><button className="button primary" onClick={account ? () => setTab('Overview') : exitWorkspace}>{account ? 'Go to overview' : 'Sign in'}</button></section>)}
         {tab === 'Grant documents' && (account && workspace.active ? <EvidencePanel procurement={procurement} operation={workspace.active} clean={!isDirty} reload={() => workspace.load(workspace.active!.id)} /> : <section className="card empty-state"><h2>Save an operation to upload a grant</h2><p>Upload a document to find the grant amount and what it can pay for.</p><button className="button primary" onClick={account ? () => setTab('Overview') : exitWorkspace}>{account ? 'Go to overview' : 'Sign in'}</button></section>)}
         {tab === 'Activity' && account && workspace.active && <DurableActivity procurement={procurement} />}
         {tab === 'Reports' && account && workspace.active && <FundingReport key={workspace.active.id} account={account} operationId={workspace.active.id} />}

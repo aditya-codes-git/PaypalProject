@@ -4,7 +4,7 @@ import { useConfirmation } from './Confirmation';
 import { PurchaseDelivery, type Delivery } from './Fulfillment';
 import { money, type Plan } from './types';
 
-type Intent = Delivery & { id: string; supplier: string; need_id: string; quantity: number; cost_cents: number; status: string; order_id: string | null; capture_id: string | null; approval_url: string | null; merchant_id: string };
+type Intent = Delivery & { id: string; supplier: string; need_id: string; quantity: number; cost_cents: number; status: string; order_id: string | null; capture_id: string | null; approval_url: string | null; merchant_id: string; buyer_approved?: boolean };
 type Evidence = { id: string; filename: string; hash: string; confirmed: number[]; pages: string[]; metadata: { model: string; usage: { total_tokens?: number } }; proposals: { warnings: string[]; funds: { name: string; amount_cents: number | null; categories: string[]; quote: string; page: number; requires_review: boolean; warnings: string[] }[] } };
 type Ledger = { version?: number; purchases: Intent[]; events: { id: string; at: string; actor: string; kind: string; message: string }[]; documents: Evidence[]; balances: Record<string, { opening_cents: number; reserved_cents: number; spent_cents: number; available_cents: number }> };
 
@@ -70,7 +70,9 @@ export function ApproveAction({ procurement, plan, operation, disabled, onApprov
   }}>{procurement.busy ? 'Reserving funds…' : 'Approve and reserve funds'}</button></div>;
 }
 
-export function Purchases({ procurement, operation, clean, onPlan }: { procurement: Procurement; operation: Operation; clean: boolean; onPlan: () => void }) {
+export function Purchases({ procurement, operation, clean, onPlan, onStatusCheck }: {
+  procurement: Procurement; operation: Operation; clean: boolean; onPlan: () => void; onStatusCheck: () => void;
+}) {
   const confirm = useConfirmation();
   const ledger = procurement.ledger;
   return <section className="card procurement-panel"><div className="card-heading"><div><h2>Pay for approved items</h2><p>PayPal uses test money in this workspace.</p></div><button className="button subtle" onClick={() => void procurement.refresh()} disabled={procurement.busy}>Refresh status</button></div>
@@ -88,8 +90,15 @@ export function Purchases({ procurement, operation, clean, onPlan }: { procureme
           action: 'Cancel purchase',
         })) void procurement.action(`/purchases/${p.id}/cancel`).catch(() => {});
       }}>Cancel purchase</button></>}
-      {p.status === 'awaiting_approval' && <>{p.approval_url && <a className="button subtle" href={p.approval_url} rel="noreferrer">Continue in PayPal</a>}<button className="button primary" disabled={!clean || procurement.busy} onClick={() => void procurement.action(`/purchases/${p.id}/capture`).catch(() => {})}>Complete payment</button></>}
-      {!['reserved', 'cancelled', 'failed', 'refunded'].includes(p.status) && <button className="button subtle" disabled={procurement.busy} onClick={() => void procurement.action(`/purchases/${p.id}/reconcile`).catch(() => {})}>Check PayPal status</button>}
+      {p.status === 'awaiting_approval' && !p.buyer_approved && p.approval_url && <a className="button subtle" href={p.approval_url} rel="noreferrer">Continue in PayPal</a>}
+      {p.status === 'awaiting_approval' && p.buyer_approved && <button className="button primary" disabled={!clean || procurement.busy} onClick={() => {
+        onStatusCheck();
+        void procurement.action(`/purchases/${p.id}/capture`, { order_id: p.order_id }).catch(() => {});
+      }}>Retry payment confirmation</button>}
+      {!['reserved', 'cancelled', 'failed', 'refunded'].includes(p.status) && <button className="button subtle" disabled={procurement.busy} onClick={() => {
+        onStatusCheck();
+        void procurement.action(`/purchases/${p.id}/reconcile`).catch(() => {});
+      }}>Check PayPal status</button>}
       {p.status === 'paid' && <button className="button subtle" disabled={procurement.busy} onClick={async () => {
         if (await confirm({
           title: 'Request a full refund?',

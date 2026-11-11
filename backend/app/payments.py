@@ -9,10 +9,12 @@ from uuid import UUID, NAMESPACE_URL, uuid5
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
+from pydantic import Field
 from starlette.concurrency import run_in_threadpool
 
 from .cloud import UserSession
 from . import finance
+from .models import Record
 
 router = APIRouter(tags=["PayPal sandbox"])
 BASE = "https://api-m.sandbox.paypal.com"
@@ -172,11 +174,19 @@ def create_order(operation_id, owner, p):
         raise HTTPException(503, "Checkout outcome is unresolved. Reconcile this purchase; funding remains reserved.")
 
 
+class CheckoutReturn(Record):
+    order_id: str = Field(pattern=r"^[A-Za-z0-9]{1,32}$")
+
+
 @router.post("/api/operations/{operation_id}/purchases/{purchase_id}/capture")
-def capture(operation_id: UUID, purchase_id: UUID, session: UserSession):
+def capture(operation_id: UUID, purchase_id: UUID, session: UserSession, checkout_return: CheckoutReturn | None = None):
     data = finance.read(operation_id, session.user_id)
     p = finance.find_purchase(data, purchase_id)
+    if checkout_return and checkout_return.order_id != p["order_id"]:
+        raise HTTPException(409, "The PayPal return does not match this purchase.")
     if p["status"] in ("paid", "refunded"):
+        return p
+    if checkout_return and p.get("pending_action") == "capture" and p["status"] in ("capturing", "unknown", "review"):
         return p
     if p["status"] != "awaiting_approval" or not p["order_id"]:
         raise HTTPException(409, "Reconcile the existing payment before submitting a capture.")
@@ -240,6 +250,8 @@ def apply_order(operation_id, owner, purchase, order):
                 current["status"] = "review"
                 return
         current["status"] = status
+        if status == "awaiting_approval":
+            current["buyer_approved"] = order.get("status") == "APPROVED"
         if capture_data:
             current["capture_id"] = capture_data["id"]
         current["pending_action"] = None if status in ("paid", "refunded", "failed", "awaiting_approval") else "capture"
