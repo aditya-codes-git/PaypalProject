@@ -28,7 +28,8 @@ jobs:
       - run: .venv/bin/python -m pytest -c backend/pytest.ini backend/tests -q
 
   browser:
-    runs-on: ubuntu-latest
+    # Match the container's Ubuntu release so cached Python uses compatible libraries.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     container:
       # Match @playwright/test in frontend/package-lock.json.
