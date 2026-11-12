@@ -23,6 +23,8 @@ class SupplierUpdate(Record):
 class SupplierAnalysis(Record):
     purchase_match: Literal["matches", "different", "unclear"]
     reported_total_received: int | None = Field(ge=0, le=500)
+    location: str | None = Field(min_length=1, max_length=100)
+    reference: str | None = Field(min_length=1, max_length=100)
     remaining_delivery: Literal["cancelled", "delayed", "expected", "unclear"]
     quote: str | None = Field(min_length=1, max_length=600)
     summary: str = Field(min_length=1, max_length=300)
@@ -39,7 +41,7 @@ def analyze(operation_id: UUID, purchase_id: UUID, update: SupplierUpdate, sessi
     revision = data["operation"]["revision"]
     digest = hashlib.sha256(update.text.encode()).hexdigest()
     previous = purchase.get("short_delivery_draft")
-    if previous and previous["source_hash"] == digest and previous["revision"] == revision:
+    if previous and previous["source_hash"] == digest and previous["revision"] == revision and "location" in previous["proposal"]:
         return previous
     context = {
         "supplier": purchase["supplier"],
@@ -55,6 +57,8 @@ def analyze(operation_id: UUID, purchase_id: UUID, update: SupplierUpdate, sessi
         "or purchase reference as different. If the message is relevant and no purchase details conflict, use matches. "
         "reported_total_received is the explicitly reported cumulative total for this purchase, not a shipment quantity, "
         "dispatch count, estimate, or arithmetic guess. Return null if ambiguous or larger than ordered_units. "
+        "Copy the explicit delivery location and receipt or delivery reference verbatim from supplier_update, "
+        "including any reference outside the evidence quote. Return null for either field if absent or ambiguous. "
         "Mark cancelled only when the supplier explicitly says no more units will arrive. Mark delayed or expected "
         "for an outstanding shipment, and unclear when there is no answer. Quote the exact contiguous excerpt from "
         "supplier_update that best supports the reported facts, up to 600 characters. Use null for no relevant evidence. "
@@ -70,6 +74,10 @@ def analyze(operation_id: UUID, purchase_id: UUID, update: SupplierUpdate, sessi
         raise HTTPException(422, "The update did not provide verifiable evidence. You can review the delivery manually.")
     if result.reported_total_received is not None and not received <= result.reported_total_received <= purchase["quantity"]:
         result.reported_total_received = None
+    for field in ("location", "reference"):
+        value = getattr(result, field)
+        if not result.quote or result.purchase_match != "matches" or not value or not value.strip() or value not in update.text:
+            setattr(result, field, None)
     return save_draft(data, purchase, update.text, result, metadata["model"], session.user_id)
 
 
@@ -77,7 +85,7 @@ def save_draft(data, purchase, source, proposal, model, actor):
     digest = hashlib.sha256(source.encode()).hexdigest()
     revision = data["operation"]["revision"]
     previous = purchase.get("short_delivery_draft")
-    if previous and previous["source_hash"] == digest and previous["revision"] == revision:
+    if previous and previous["source_hash"] == digest and previous["revision"] == revision and "location" in previous["proposal"]:
         return previous
     record = {"id": str(uuid4()), "source_hash": digest, "revision": revision,
               "proposal": proposal.model_dump(), "model": model}

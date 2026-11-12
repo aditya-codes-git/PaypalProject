@@ -162,6 +162,7 @@ def respond(request: AssistantRequest, session: UserSession):
             proposal = short_delivery.SupplierAnalysis(
                 purchase_match="matches", reported_total_received=None if accepted is None else selected["received_units"] + accepted,
                 remaining_delivery="cancelled", quote=reply.receipt.quote, summary=reply.message[:300],
+                location=reply.receipt.location or None, reference=reply.receipt.reference or None,
                 operator_check="Confirm what physically arrived and check that the rest of this delivery will not arrive.",
             )
             draft = short_delivery.save_draft(data, finance.find_purchase(data, selected["id"]), latest.text,

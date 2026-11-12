@@ -53,9 +53,10 @@ def test_recovery_from_ai_evidence_to_replacement_payment(monkeypatch):
             saved["version"] += 1
         return deepcopy(saved)
 
-    source = "We delivered eight blankets. The remaining four will not ship."
+    source = "We delivered eight blankets. The remaining four will not ship. Location: Maple Creek Community Hall. Reference: MC-DEL-001."
     ai_payload = {
         "purchase_match": "matches", "reported_total_received": 8, "remaining_delivery": "cancelled",
+        "location": "Maple Creek Community Hall", "reference": "MC-DEL-001",
         "quote": "Invented evidence", "summary": "Eight arrived and the rest were cancelled.",
         "operator_check": "Verify the eight blankets against the receipt.",
     }
@@ -112,8 +113,10 @@ def test_recovery_from_ai_evidence_to_replacement_payment(monkeypatch):
 
     # Requests are also limited per client minute. Use a fresh client for the next test action.
     client = TestClient(app, client=("recovery-test-second", 50000))
-    ai_payload["quote"] = source
+    ai_payload["quote"] = source.split(" Location:", 1)[0]
     draft = post(purchase + "/short-delivery/analyze", {"text": source})
+    assert draft["proposal"]["location"] == "Maple Creek Community Hall"
+    assert draft["proposal"]["reference"] == "MC-DEL-001"
     assert post(purchase + "/short-delivery/analyze", {"text": source})["id"] == draft["id"]
     assert ai_calls == 2
     assert finance.balances(saved["state"])["shelter"]["spent_cents"] == 9600
@@ -123,7 +126,7 @@ def test_recovery_from_ai_evidence_to_replacement_payment(monkeypatch):
         "accepted_units": 8, "rejected_units": 0, "close_delivery": True,
         "short_delivery_review": {"expected_revision": 1, "expected_receipts": 0, "analysis_id": draft["id"]},
     }
-    assert post(purchase + "/receipts", receipt)["short_delivery"]["evidence"]["proposal"]["quote"] == source
+    assert post(purchase + "/receipts", receipt)["short_delivery"]["evidence"]["proposal"]["quote"] == ai_payload["quote"]
     assert len(post(purchase + "/receipts", receipt)["receipts"]) == 1
 
     saved["state"]["opening"]["shelter"] = 10000

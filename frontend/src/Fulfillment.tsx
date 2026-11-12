@@ -10,6 +10,8 @@ export type SupplierAnalysis = {
   proposal: {
     purchase_match: 'matches' | 'different' | 'unclear';
     reported_total_received: number | null;
+    location?: string | null;
+    reference?: string | null;
     remaining_delivery: 'cancelled' | 'delayed' | 'expected' | 'unclear';
     quote: string | null;
     summary: string;

@@ -503,9 +503,13 @@ h1 { font-size: clamp(34px, 3.4vw, 50px); letter-spacing: -.045em; line-height: 
   box-shadow: var(--shadow);
 }
 .assistant-panel > header { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 14px; }
+.assistant-header-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.assistant-content:not([hidden]) { display: contents; }
+.assistant-content[hidden] { display: none; }
 .assistant-title { display: flex; gap: 13px; align-items: center; min-width: 0; }
 .assistant-mark { display: grid; place-items: center; width: 46px; height: 46px; flex: 0 0 46px; border-radius: 13px; background: var(--accent-soft); color: var(--accent-text); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); }
-.assistant-panel h1 { font-size: clamp(31px, 4vw, 49px); margin-bottom: 4px; }
+.assistant-panel h1 { font-size: clamp(28px, 3.5vw, 42px); margin-bottom: 4px; }
+.assistant-panel p { font-size: .94rem; }
 .assistant-panel p, .assistant-compose small { line-height: 1.55; color: var(--muted); overflow-wrap: anywhere; }
 .assistant-transcript { display: grid; gap: 15px; max-height: min(40vh, 390px); overflow: auto; overscroll-behavior: contain; padding: 2px 5px 2px 1px; }
 .assistant-turn { display: grid; gap: 8px; min-width: 0; }
@@ -519,6 +523,7 @@ h1 { font-size: clamp(34px, 3.4vw, 50px); letter-spacing: -.045em; line-height: 
 .assistant-compose label { font-weight: 600; font-size: 15px; }
 .assistant-compose textarea { width: 100%; min-height: 92px; resize: vertical; padding: 12px 14px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--canvas); color: var(--text); font: inherit; }
 .assistant-compose textarea::placeholder { color: var(--muted); opacity: .9; }
+.assistant-compose textarea { font-size: .94rem; }
 .assistant-compose textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .assistant-compose-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .assistant-compose-footer small { flex: 1; min-width: 120px; }
@@ -539,7 +544,7 @@ h1 { font-size: clamp(34px, 3.4vw, 50px); letter-spacing: -.045em; line-height: 
 @media (min-width: 1230px) {
   .workspace-layout.has-review { display: grid; grid-template-columns: minmax(315px, .56fr) minmax(0, 1fr); gap: clamp(18px, 2vw, 30px); align-items: start; }
   .has-review .assistant-panel { gap: 15px; padding: 19px; }
-  .has-review .assistant-panel h1 { font-size: clamp(25px, 2.4vw, 34px); }
+  .has-review .assistant-panel h1 { font-size: clamp(24px, 2.2vw, 31px); }
   .has-review .assistant-detail { margin-top: 0; }
   .has-review .assistant-return { display: none; }
   .has-review .assistant-detail .overview-grid, .has-review .assistant-detail .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -620,7 +625,7 @@ h1 { font-size: clamp(34px, 3.4vw, 50px); letter-spacing: -.045em; line-height: 
   }
 }
 /* Let the transcript absorb changes in available height before the controls. */
-.assistant-panel > :not(.assistant-transcript) { flex-shrink: 0; }
+.assistant-panel > header, .assistant-content > :not(.assistant-transcript) { flex-shrink: 0; }
 .assistant-transcript { min-height: 0; }
 @media (min-width: 801px) and (min-height: 500px) {
   .assistant-compose textarea { min-height: 68px; height: 68px; resize: none; }

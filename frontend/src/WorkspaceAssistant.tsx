@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { cloudRequest, type Account, type Operation } from './cloud';
 import { emptyScenario, type Need, type Offer, type Scenario } from './types';
 import type { SupplierAnalysis } from './Fulfillment';
@@ -74,6 +75,7 @@ export function WorkspaceAssistant({ account, operation, threads, busy, quickAct
   const key = operation?.id ?? 'new';
   const [turns, setTurns] = useState(() => threads.get(key) ?? []);
   const [input, setInput] = useState('');
+  const [collapsed, setCollapsed] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [error, setError] = useState('');
   const [pendingMessage, setPendingMessage] = useState('');
@@ -82,7 +84,7 @@ export function WorkspaceAssistant({ account, operation, threads, busy, quickAct
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
   useEffect(() => {
     if (transcript.current) transcript.current.scrollTop = transcript.current.scrollHeight;
-  }, [turns.length, pendingMessage]);
+  }, [turns.length, pendingMessage, collapsed]);
 
   async function ask(event: FormEvent) {
     event.preventDefault();
@@ -115,9 +117,17 @@ export function WorkspaceAssistant({ account, operation, threads, busy, quickAct
 
   return <section className="assistant-panel card" aria-label="Ask ReliefOps" id="workspace-assistant">
     <header><div className="assistant-title"><span className="assistant-mark"><Icon name="chat" size={22} /></span>
-      <div><h1 id="workspace-chat-heading" tabIndex={-1}>Ask ReliefOps</h1><p>{operation ? operation.name : 'What does your relief team need?'}</p></div></div>
-      <button className="button subtle" onClick={onOpenEditor} disabled={busy}>{operation ? 'Edit operation' : 'Open setup form'}</button>
+      <div><h1 id="workspace-chat-heading" tabIndex={-1} onFocus={() => setCollapsed(false)}>Ask ReliefOps</h1><p>{operation ? operation.name : 'What does your relief team need?'}</p></div></div>
+      <div className="assistant-header-actions">
+        {!collapsed && <button className="button subtle" onClick={onOpenEditor} disabled={busy}>{operation ? 'Edit operation' : 'Open setup form'}</button>}
+        <button className="icon-button" type="button" aria-expanded={!collapsed} aria-controls="workspace-chat-content"
+          aria-label={collapsed ? 'Expand chat' : 'Collapse chat'} title={collapsed ? 'Expand chat' : 'Collapse chat'}
+          onClick={() => setCollapsed(value => !value)}>
+          {collapsed ? <ChevronDown size={18} aria-hidden="true" /> : <ChevronUp size={18} aria-hidden="true" />}
+        </button>
+      </div>
     </header>
+    <div id="workspace-chat-content" className="assistant-content" hidden={collapsed}>
     {(turns.length > 0 || pendingMessage) && <div ref={transcript} className="assistant-transcript" aria-live="polite" aria-label="Conversation">
       {turns.map(({ user, reply }, index) => <div className="assistant-turn" key={index}>
         <p className="assistant-user"><span className="sr-only">You: </span>{user}</p>
@@ -138,5 +148,6 @@ export function WorkspaceAssistant({ account, operation, threads, busy, quickAct
     </form>
     {quickActions.length > 0 && <div className="assistant-shortcuts" aria-label="Next actions">{quickActions.map(({ label, reply }) =>
       <button className="button subtle" key={label} onClick={() => onAction(reply, '')} disabled={busy}>{label} <Icon name="arrow" size={15} /></button>)}</div>}
+    </div>
   </section>;
 }

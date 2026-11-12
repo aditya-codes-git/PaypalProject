@@ -161,8 +161,8 @@ export function ShortDeliveryRecovery({ purchase, procurement, operation, clean,
           <div className="input-grid">
             <label>Additional usable units<input type="number" required min={0} max={remaining - 1} step={1} value={accepted} onChange={event => setAccepted(event.target.value)} /></label>
             <label>Rejected units<input name="rejected" type="number" required min={0} max={remaining - Number(accepted)} step={1} defaultValue={suggested?.draft.rejected_units ?? 0} /></label>
-            <label>Delivery location<input name="location" required maxLength={100} defaultValue={suggested?.draft.location ?? ''} /></label>
-            <label>Receipt or supplier reference<input name="reference" required maxLength={100} defaultValue={suggested?.draft.reference ?? purchase.supplier_confirmation?.supplier_reference ?? ''} /></label>
+            <label>Delivery location<input key={analysis?.id ?? 'manual-location'} name="location" required maxLength={100} defaultValue={analysis?.proposal.location ?? suggested?.draft.location ?? ''} /></label>
+            <label>Receipt or supplier reference<input key={analysis?.id ?? 'manual-reference'} name="reference" required maxLength={100} defaultValue={analysis?.proposal.reference ?? suggested?.draft.reference ?? purchase.supplier_confirmation?.supplier_reference ?? ''} /></label>
           </div>
           <label className="check-label"><input type="checkbox" checked={verified} onChange={event => setVerified(event.target.checked)} required />I checked the delivery and confirmed the remaining units won’t arrive.</label>
           <button className="button primary" disabled={blocked}>{task === 'receipt' ? 'Saving delivery…' : 'Save short delivery and compare options'}</button>
