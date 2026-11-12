@@ -2,29 +2,45 @@ import { useEffect, useRef, useState } from 'react';
 import { cloudRequest, fingerprint, type Account, type Operation, type OperationSummary, type SavedPlan } from './cloud';
 import { emptyScenario, type Plan, type Scenario } from './types';
 
-export function useSavedWorkspace(account: Account | null, restore: (scenario: Scenario, plan: Plan | null, plannedScenario: Scenario | null) => void) {
+type SavedWorkspace = { operation: Operation; plans: SavedPlan[] };
+
+export function useSavedWorkspace(account: Account | null, restore: (scenario: Scenario, plan: Plan | null, plannedScenario: Scenario | null) => void, restoreLatest: boolean) {
   const [operations, setOperations] = useState<OperationSummary[]>([]);
   const [active, setActive] = useState<Operation | null>(null);
   const [name, setName] = useState('');
   const [history, setHistory] = useState<SavedPlan[]>([]);
   const [savedFingerprint, setSavedFingerprint] = useState('');
+  const [initializing, setInitializing] = useState(!!account && restoreLatest);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const restoreRef = useRef(restore);
   restoreRef.current = restore;
   const requestId = useRef(0);
   const client = account?.client;
+  const userId = account?.session.user.id;
 
   useEffect(() => {
     const request = ++requestId.current;
     if (!account) return;
-    setBusy(true);
-    cloudRequest<OperationSummary[]>(account, '').then(rows => {
-      if (request === requestId.current) setOperations(rows);
-    }).catch(err => { if (request === requestId.current) setError(err.message); })
-      .finally(() => { if (request === requestId.current) setBusy(false); });
+    async function openWorkspace(session: Account) {
+      try {
+        // The operations endpoint returns the most recently updated operation first.
+        const rows = await cloudRequest<OperationSummary[]>(session, '');
+        if (request !== requestId.current) return;
+        setOperations(rows);
+        if (restoreLatest && rows.length) {
+          const result = await cloudRequest<SavedWorkspace>(session, `/${rows[0].id}`);
+          if (request === requestId.current) install(result.operation, result.plans);
+        }
+      } catch (err) {
+        if (request === requestId.current) setError(err instanceof Error ? err.message : 'Could not open saved operations.');
+      } finally {
+        if (request === requestId.current) setInitializing(false);
+      }
+    }
+    void openWorkspace(account);
     return () => { requestId.current += 1; };
-  }, [client]);
+  }, [client, userId, restoreLatest]);
 
   function install(operation: Operation, plans: SavedPlan[]) {
     setActive(operation); setName(operation.name); setHistory(plans);
@@ -35,7 +51,7 @@ export function useSavedWorkspace(account: Account | null, restore: (scenario: S
   async function load(id: string) {
     if (!account) return;
     setBusy(true); setError('');
-    try { const result = await cloudRequest<{ operation: Operation; plans: SavedPlan[] }>(account, `/${id}`); install(result.operation, result.plans); }
+    try { const result = await cloudRequest<SavedWorkspace>(account, `/${id}`); install(result.operation, result.plans); }
     catch (err) { setError(err instanceof Error ? err.message : 'Could not load this operation.'); }
     finally { setBusy(false); }
   }
@@ -60,7 +76,7 @@ export function useSavedWorkspace(account: Account | null, restore: (scenario: S
     restoreRef.current(emptyScenario(), null, null);
   }
 
-  return { operations, active, name, setName, history, setHistory, busy, error, setError, load, save, fresh,
+  return { operations, active, name, setName, history, setHistory, initializing, busy, error, setError, load, save, fresh,
     dirty: (scenario: Scenario) => active
       ? fingerprint({ name: name.trim(), scenario }) !== savedFingerprint
       : !!name.trim() || scenario.needs.length > 0 };

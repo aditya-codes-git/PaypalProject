@@ -27,6 +27,15 @@ type Tab = keyof typeof pages;
 const tabs = Object.keys(pages) as Tab[];
 type Event = { id: number; time: string; title: string; body: string };
 type Integrations = Record<string, { configured: boolean; implemented: boolean }>;
+const uuid = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
+
+function readCheckoutReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const operation = params.get('operation');
+  const payment = params.get('payment');
+  if (!operation || !uuid.test(operation) || (payment !== 'approved' && payment !== 'cancelled')) return null;
+  return { params, operation, payment, purchase: params.get('purchase'), order: params.get('token') };
+}
 
 export function App({ account = null, onExit = () => {} }: { account?: Account | null; onExit?: () => void | Promise<void> }) {
   const { theme } = useTheme();
@@ -44,6 +53,7 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
   const [showSetup, setShowSetup] = useState(false);
   const [integrations, setIntegrations] = useState<Integrations | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
+  const [checkoutReturn] = useState(readCheckoutReturn);
   const revision = useRef(0);
   const eventSequence = useRef(0);
   const handlingPaymentReturn = useRef(false);
@@ -52,9 +62,9 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
     setSetupEdited(false);
     setScenario(next); setPlan(savedPlan); setPlannedSnapshot(savedScenario ? fingerprint(savedScenario) : '');
     setEvents([]); setError(''); setPaymentNotice(''); setDrawer(false);
-  });
+  }, !checkoutReturn);
   const procurement = useProcurement(account, workspace.active, workspace.history.length);
-  const locked = busy || workspace.busy || procurement.busy;
+  const locked = busy || workspace.initializing || workspace.busy || procurement.busy;
   const stale = !!plan && (fingerprint(scenario) !== plannedSnapshot || plan.finance_version != null && procurement.ledger?.version != null && plan.finance_version !== procurement.ledger.version);
   const hasLedger = !!procurement.ledger && Object.keys(procurement.ledger.balances).length > 0;
   const available = (id: string, draft: number) => hasLedger ? procurement.ledger!.balances[id]?.available_cents ?? 0 : draft;
@@ -76,14 +86,8 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
   }, [isDirty]);
 
   useEffect(() => {
-    if (!account || handlingPaymentReturn.current) return;
-    const params = new URLSearchParams(window.location.search);
-    const operation = params.get('operation');
-    const purchase = params.get('purchase');
-    const order = params.get('token');
-    const payment = params.get('payment');
-    const uuid = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
-    if (!operation || !uuid.test(operation) || (payment !== 'approved' && payment !== 'cancelled')) return;
+    if (!account || !checkoutReturn || handlingPaymentReturn.current) return;
+    const { params, operation, purchase, order, payment } = checkoutReturn;
     handlingPaymentReturn.current = true;
     setBusy(true);
     setTab('Purchases');
@@ -231,7 +235,7 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
       </header>
       <main>
         {tab === 'Purchases' && paymentNotice && <p className="payment-notice" role="status">{paymentNotice}</p>}
-        {settingUp ? (busy && paymentNotice ? null : <section aria-label={account ? "Saved operations" : "New operation setup"}>
+        {workspace.initializing ? <p role="status">Opening saved operations…</p> : settingUp ? (busy && paymentNotice ? null : <section aria-label={account ? "Saved operations" : "New operation setup"}>
           <div className="page-heading"><h1>Start a relief operation</h1></div>
           <p className="setup-intro">Enter who you need to supply, what each household needs, and what suppliers can deliver.</p>
           {workspace.error && <div className="error-banner" role="alert">{workspace.error}</div>}
