@@ -120,14 +120,14 @@ export function Purchases({ procurement, operation, clean, onPlan, onStatusCheck
     {ledger?.purchases.map(p => <article className="purchase-card" id={`purchase-${p.id}`} tabIndex={-1} key={p.id}><div className="purchase-heading"><div><h3>{p.supplier}</h3><p>{p.quantity} × {p.supply_name ?? operation.scenario.needs.find(n => n.id === p.need_id)?.name ?? p.need_id}</p></div><strong>{money(p.cost_cents)}</strong></div><p><span className="tag">{purchaseStatusLabel(p.status)}</span></p>
     {p.replaces_purchase_id && <p><a href={`#purchase-${p.replaces_purchase_id}`}>Replacement for {ledger.purchases.find(row => row.id === p.replaces_purchase_id)?.supplier ?? 'original purchase'}</a></p>}
     {p.order_id && <details className="technical-details"><summary>PayPal details</summary><small className="provider-reference">Test recipient: {p.merchant_id ? 'Configured supplier account' : 'Default test account'}<br />Order: {p.order_id}{p.capture_id && <><br />Payment: {p.capture_id}</>}</small></details>}<div className="action-row">
-      {p.status === 'reserved' && <><button className="button primary" disabled={!clean || procurement.busy} onClick={() => void procurement.action(`/purchases/${p.id}/checkout`).then(result => { if (result.approval_url) window.location.assign(result.approval_url); }).catch(() => {})}>Pay with PayPal</button><button className="button subtle" disabled={procurement.busy} onClick={async () => {
+      {p.status === 'reserved' && <><button className="button primary" disabled={!clean || procurement.busy} onClick={() => void procurement.action(`/purchases/${p.id}/checkout`).then(result => { if (result.approval_url) window.location.assign(result.approval_url); }).catch(() => {})}><img className="paypal-checkout-mark" src="/paypal-monogram.png" alt="" width={24} height={24} />Pay with PayPal</button><button className="button subtle" disabled={procurement.busy} onClick={async () => {
         if (await confirm({
           title: 'Cancel this purchase?',
           message: `${money(p.cost_cents)} will be available to spend again.`,
           action: 'Cancel purchase',
         })) void procurement.action(`/purchases/${p.id}/cancel`).catch(() => {});
       }}>Cancel purchase</button></>}
-      {p.status === 'awaiting_approval' && !p.buyer_approved && p.approval_url && <a className="button subtle" href={p.approval_url} rel="noreferrer">Continue in PayPal</a>}
+      {p.status === 'awaiting_approval' && !p.buyer_approved && p.approval_url && <a className="button subtle" href={p.approval_url} rel="noreferrer"><img className="paypal-checkout-mark" src="/paypal-monogram.png" alt="" width={24} height={24} />Continue in PayPal</a>}
       {p.status === 'awaiting_approval' && p.buyer_approved && <button className="button primary" disabled={!clean || procurement.busy} onClick={() => {
         onStatusCheck();
         void procurement.action(`/purchases/${p.id}/capture`, { order_id: p.order_id }).catch(() => {});
