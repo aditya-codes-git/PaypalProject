@@ -17,8 +17,12 @@ test('public homepage explains the workflow and opens a blank guest planner', as
   const kit = page.locator('.landing-kit');
   await expect.poll(() => kit.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
   const artwork = page.locator('.landing-hero-art');
+  const header = page.getByRole('banner');
+  const desktopGap = (await header.boundingBox())!.y;
+  expect(desktopGap).toBeGreaterThan(0);
   await page.evaluate(() => window.scrollTo(0, 220));
   await expect(artwork).not.toHaveCSS('transform', 'none');
+  await expect.poll(async () => (await header.boundingBox())?.y).toBe(desktopGap);
   const blanket = page.locator('.landing-workflow-art img');
   await blanket.scrollIntoViewIfNeeded();
   await expect.poll(() => blanket.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
@@ -41,6 +45,9 @@ test('public homepage explains the workflow and opens a blank guest planner', as
   const footer = page.getByRole('contentinfo');
   await footer.getByRole('link', { name: 'PayPal checkout' }).click();
   await expect(page).toHaveURL(/#paypal$/);
+  const headerBottom = desktopGap + (await header.boundingBox())!.height;
+  const paypalHeading = page.getByRole('heading', { name: 'Follow a purchase from grant to payment.' });
+  await expect.poll(async () => (await paypalHeading.boundingBox())?.y).toBeGreaterThan(headerBottom);
   await expect(page.getByText('Scroll to move through checkout')).toBeInViewport();
   const purchase = page.getByRole('article', { name: 'Sample purchase' });
   await expect(purchase.getByRole('status')).toContainText('$96.00 reserved. $0.00 spent.');
@@ -58,6 +65,7 @@ test('public homepage explains the workflow and opens a blank guest planner', as
     await page.evaluate(top => window.scrollTo({ top }), stops[index]);
     await expect(purchase.getByRole('status')).toContainText(status);
     await expect(page.locator('.landing-paypal-inner')).toBeInViewport({ ratio: 0.9 });
+    await expect.poll(async () => (await page.locator('.landing-paypal-inner').boundingBox())?.y).toBeGreaterThan(headerBottom);
   }
   await page.evaluate(top => window.scrollTo({ top }), stops[0]);
   await expect(purchase.getByRole('status')).toContainText('Awaiting buyer approval');
@@ -75,8 +83,11 @@ test('public homepage explains the workflow and opens a blank guest planner', as
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
   await expect(kit).toHaveCSS('opacity', '1');
+  const mobileGap = (await header.boundingBox())!.y;
+  expect(mobileGap).toBeGreaterThan(0);
   await page.evaluate(() => window.scrollTo(0, 220));
   await expect(artwork).toHaveCSS('transform', 'none');
+  await expect.poll(async () => (await header.boundingBox())?.y).toBe(mobileGap);
   await page.getByRole('button', { name: 'Switch to dark theme' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(page.locator('html')).not.toHaveAttribute('data-theme-reveal', '');

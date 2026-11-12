@@ -56,10 +56,12 @@ export function Landing() {
   const hygieneCost = plan.units * hygienePrice;
   return <LazyMotion features={domAnimation}><div className="landing" id="top">
     <a className="landing-skip" href="#landing-content">Skip to content</a>
-    <header className="landing-header landing-wrap">
-      <a href="/" className="landing-brand"><Brand /></a>
-      <nav aria-label="Main navigation"><a href="#example">Example plan</a><a href="#workflow">How it works</a><a href="#paypal">PayPal checkout</a></nav>
-      <div className="landing-nav-actions"><ThemeToggle animate /><a className="landing-signin" href={workspace}>Sign in</a></div>
+    <header className="landing-header">
+      <div className="landing-header-inner landing-wrap">
+        <a href="/" className="landing-brand"><Brand /></a>
+        <nav aria-label="Main navigation"><a href="#example">Example plan</a><a href="#workflow">How it works</a><a href="#paypal">PayPal checkout</a></nav>
+        <div className="landing-nav-actions"><ThemeToggle animate /><a className="landing-signin" href={workspace}>Sign in</a></div>
+      </div>
     </header>
     <main id="landing-content">
       <section ref={hero} className="landing-hero" aria-labelledby="landing-title">
