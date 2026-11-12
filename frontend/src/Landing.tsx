@@ -3,6 +3,7 @@ import { ArrowDown, ArrowRight, ArrowUpRight, Check, ChevronDown, ClipboardList,
 import { LazyMotion, domAnimation, useReducedMotion, useScroll, useTransform } from 'motion/react';
 import * as m from 'motion/react-m';
 import { Brand } from './Brand';
+import { LandingPayPal } from './LandingPayPal';
 import { ThemeToggle } from './Theme';
 import './landing.css';
 
@@ -57,8 +58,8 @@ export function Landing() {
     <a className="landing-skip" href="#landing-content">Skip to content</a>
     <header className="landing-header landing-wrap">
       <a href="/" className="landing-brand"><Brand /></a>
-      <nav aria-label="Main navigation"><a href="#example">Example plan</a><a href="#workflow">How it works</a><a href="#records">Purchase records</a></nav>
-      <div className="landing-nav-actions"><ThemeToggle /><a className="landing-signin" href={workspace}>Sign in</a></div>
+      <nav aria-label="Main navigation"><a href="#example">Example plan</a><a href="#workflow">How it works</a><a href="#paypal">PayPal checkout</a></nav>
+      <div className="landing-nav-actions"><ThemeToggle animate /><a className="landing-signin" href={workspace}>Sign in</a></div>
     </header>
     <main id="landing-content">
       <section ref={hero} className="landing-hero" aria-labelledby="landing-title">
@@ -125,6 +126,7 @@ export function Landing() {
           <ol className="landing-steps">{steps.map(({ icon: Icon, title, body }) => <li key={title}><Icon size={19} aria-hidden="true" /><div><h3>{title}</h3><p>{body}</p></div></li>)}</ol>
         </div>
       </section>
+      <LandingPayPal />
       <section className="landing-records" id="records" aria-labelledby="records-title">
         <div className="landing-wrap">
           <m.div className="landing-records-heading" {...reveal}>
@@ -167,7 +169,7 @@ export function Landing() {
       <div className="landing-wrap">
         <div className="landing-footer-main">
           <div><a href="#top" className="landing-brand"><Brand /></a><p>Purchase planning for relief teams.</p></div>
-          <nav aria-label="Explore ReliefOps"><strong>Explore</strong><a href="#example">Example plan</a><a href="#workflow">How it works</a><a href="#records">Purchase records</a></nav>
+          <nav aria-label="Explore ReliefOps"><strong>Explore</strong><a href="#example">Example plan</a><a href="#workflow">How it works</a><a href="#paypal">PayPal checkout</a><a href="#records">Purchase records</a></nav>
           <nav aria-label="Get started"><strong>Get started</strong><a href={guest}>Try the planner</a><a href={workspace}>Open workspace</a><a href="#questions">Common questions</a></nav>
           <nav aria-label="Project resources"><strong>Project</strong><a href="https://github.com/aditya-codes-git/PaypalProject">Source code <ArrowUpRight size={14} aria-hidden="true" /></a></nav>
         </div>

@@ -6,6 +6,14 @@ test('public homepage explains the workflow and opens a blank guest planner', as
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Plan what to buy. Know who it reaches.');
+  for (const theme of ['dark', 'light']) {
+    await page.getByRole('button', { name: `Switch to ${theme} theme` }).click();
+    await expect.poll(() => page.evaluate(() => document.getAnimations().some(animation =>
+      animation instanceof CSSAnimation && animation.animationName === 'landing-theme-reveal',
+    ))).toBe(true);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    await expect(page.locator('html')).not.toHaveAttribute('data-theme-reveal', '');
+  }
   const kit = page.locator('.landing-kit');
   await expect.poll(() => kit.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
   const artwork = page.locator('.landing-hero-art');
@@ -31,6 +39,34 @@ test('public homepage explains the workflow and opens a blank guest planner', as
   await page.getByText('How does ReliefOps use AI?', { exact: true }).click();
   await expect(page.getByText(/You review the source and confirm the terms/)).toBeVisible();
   const footer = page.getByRole('contentinfo');
+  await footer.getByRole('link', { name: 'PayPal checkout' }).click();
+  await expect(page).toHaveURL(/#paypal$/);
+  await expect(page.getByText('Scroll to move through checkout')).toBeInViewport();
+  const purchase = page.getByRole('article', { name: 'Sample purchase' });
+  await expect(purchase.getByRole('status')).toContainText('$96.00 reserved. $0.00 spent.');
+  const { start, stops } = await page.locator('.landing-paypal-track').evaluate(track => {
+    const scene = track.firstElementChild as HTMLElement;
+    const start = window.scrollY + track.getBoundingClientRect().top - parseFloat(getComputedStyle(scene).top);
+    const travel = track.clientHeight - scene.offsetHeight;
+    return { start, stops: [0.38, 0.63, 0.88].map(progress => start + travel * progress) };
+  });
+  await page.evaluate(top => window.scrollTo({ top }), start + 30);
+  await page.mouse.wheel(0, 400);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(start + 350);
+  await expect(page.getByText('Step 1 of 4', { exact: true })).toBeInViewport();
+  for (const [index, status] of ['Awaiting buyer approval', 'Paid in sandbox', 'Ready for delivery'].entries()) {
+    await page.evaluate(top => window.scrollTo({ top }), stops[index]);
+    await expect(purchase.getByRole('status')).toContainText(status);
+    await expect(page.locator('.landing-paypal-inner')).toBeInViewport({ ratio: 0.9 });
+  }
+  await page.evaluate(top => window.scrollTo({ top }), stops[0]);
+  await expect(purchase.getByRole('status')).toContainText('Awaiting buyer approval');
+  await page.getByRole('button', { name: 'Approve in PayPal' }).click();
+  await expect(purchase.getByRole('status')).toContainText('Awaiting buyer approval');
+  await page.getByRole('button', { name: 'Confirm the payment' }).click();
+  await expect(purchase.getByRole('status')).toContainText('$0.00 reserved. $96.00 spent.');
+  await page.getByRole('button', { name: 'Keep the purchase record' }).click();
+  await expect(purchase.getByText(/export the record as a PDF/)).toBeVisible();
   await footer.getByRole('link', { name: 'Purchase records' }).click();
   await expect(page).toHaveURL(/#records$/);
   await expect(page.getByText('Sample delivery receipt')).toBeVisible();
@@ -43,6 +79,7 @@ test('public homepage explains the workflow and opens a blank guest planner', as
   await expect(artwork).toHaveCSS('transform', 'none');
   await page.getByRole('button', { name: 'Switch to dark theme' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('html')).not.toHaveAttribute('data-theme-reveal', '');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.screenshot({ path: testInfo.outputPath('landing-mobile-dark.png'), fullPage: true });
   await page.getByRole('link', { name: 'Try the planner' }).first().click();

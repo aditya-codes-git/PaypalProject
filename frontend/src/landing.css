@@ -19,17 +19,42 @@
   font-size: 16px;
 }
 [data-theme="dark"] .landing {
-  --paper: #151627;
-  --surround: #0d0e19;
-  --ink: #f0f0ff;
-  --muted: #bcbfdb;
-  --line: #363953;
-  --surface: #202238;
-  --board: #24254a;
-  --dot: #a1a8ff38;
+  --paper: #0a0a0a;
+  --surround: #000;
+  --ink: #f5f5f5;
+  --muted: #b8b8b8;
+  --line: #363636;
+  --surface: #171717;
+  --board: #101010;
+  --dot: #ffffff26;
   --accent: #b8b7ff;
-  --accent-soft: #30335a;
-  --dark-card: #171939;
+  --accent-soft: #121212;
+  --dark-card: #1b1b1b;
+}
+[data-theme="dark"] .landing :is(.landing-hero-mark, .landing-hero-grant, .landing-hero-stock, .landing-hero-plan, .landing-preview) {
+  box-shadow: 0 16px 36px #0008;
+}
+[data-theme="dark"] .landing .landing-hero-grant {
+  background: #222;
+  color: var(--ink);
+  border-color: var(--line);
+}
+[data-theme="dark"] .landing .landing-hero-grant::before { background: #777b; }
+[data-theme="dark"] .landing .landing-hero-grant svg { color: var(--accent); }
+[data-theme="dark"] .landing :is(.landing-hero-grant span, .landing-hero-stock div, .landing-hero-stock > span, .landing-workflow-art p) {
+  color: var(--muted);
+}
+[data-theme="dark"] .landing .landing-hero-stock {
+  color: var(--ink);
+  border-color: var(--line);
+}
+[data-theme="dark"] .landing .landing-workflow-art {
+  background: #151515;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+[data-theme="dark"] .landing .landing-workflow-art::before {
+  background: radial-gradient(circle at 76% 51%, #393939, transparent 58%);
 }
 .landing > main { max-width: none; margin: 0; padding: 0; }
 .landing a { color: inherit; text-decoration: none; }
@@ -158,6 +183,65 @@
 .landing-steps { list-style: none; margin: 0; padding: 0; }
 .landing-steps li { display: flex; gap: 13px; padding: 9px 0 11px; border-bottom: 1px solid var(--line); }
 .landing-steps li > svg { color: var(--accent); flex-shrink: 0; margin-top: 4px; }
+.landing-paypal { padding-block: clamp(46px, 7vw, 96px); border-top: 1px solid var(--line); }
+.landing-paypal-inner { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); align-items: center; gap: clamp(30px, 7vw, 100px); }
+.landing-paypal-intro { max-width: 740px; margin-bottom: clamp(24px, 4vw, 44px); }
+.landing-paypal-intro h2 { margin-block: 12px 16px; }
+.landing-paypal-intro > p:not(.landing-kicker), .landing-paypal-sandbox { color: var(--muted); }
+.landing-paypal-scroll-hint { display: none; align-items: center; gap: 11px; margin-top: 19px; }
+.landing-paypal-scroll-hint > span { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; border: 1px solid var(--line); background: var(--accent-soft); color: var(--accent); }
+.landing-paypal-scroll-hint strong, .landing-paypal-scroll-hint small { display: block; }
+.landing-paypal-scroll-hint strong { font-size: 15px; }
+.landing-paypal-scroll-hint small { color: var(--muted); font-size: 13px; }
+.landing-paypal-progress { display: flex; flex-wrap: wrap; align-items: center; gap: 9px 13px; font-size: 13px; font-weight: 650; }
+.landing-paypal-progress > div { display: flex; gap: 4px; }
+.landing-paypal-progress > div > span { width: 21px; height: 4px; border-radius: 4px; background: var(--line); }
+.landing-paypal-progress .is-reached { background: var(--accent); }
+.landing-paypal-steps { list-style: none; position: relative; margin: 14px 0 16px; padding: 0; }
+.landing-paypal-steps::before { content: ""; position: absolute; left: 17px; top: 22px; bottom: 22px; border-left: 1px dashed var(--accent); }
+.landing-paypal-steps button { position: relative; display: grid; width: 100%; min-height: 49px; grid-template-columns: 35px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 5px 9px 5px 0; border: 0; background: transparent; color: var(--muted); text-align: left; font-size: 15px; }
+.landing-paypal-step-icon { display: grid; width: 35px; height: 35px; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--paper); color: var(--accent); }
+.landing-paypal-steps button:hover, .landing-paypal-steps button[aria-pressed="true"] { color: var(--ink); }
+.landing-paypal-steps button[aria-pressed="true"] { font-weight: 650; }
+.landing-paypal-steps button[aria-pressed="true"] .landing-paypal-step-icon { border-color: var(--accent); background: var(--accent); color: var(--paper); }
+.landing-paypal-step-arrow { color: var(--accent); opacity: 0; }
+.landing-paypal-steps button:is(:hover,:focus-visible,[aria-pressed="true"]) .landing-paypal-step-arrow { opacity: 1; }
+.landing-paypal-sandbox { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+.landing-paypal-sandbox svg { flex-shrink: 0; }
+.landing-paypal-stage { position: relative; isolation: isolate; display: grid; place-items: center; padding: clamp(25px, 4.5vw, 61px) clamp(20px, 4vw, 54px); border-radius: 18px; border: 1px solid var(--line); overflow: hidden; background: radial-gradient(circle, var(--dot) 1px, transparent 1.3px) 0 0 / 8px 8px, var(--board); }
+.landing-paypal-stage::before { content: ""; position: absolute; z-index: -1; inset: 15% 15%; border: 1px solid var(--line); background: var(--accent-soft); transform: rotate(8deg); box-shadow: 0 15px 36px #0002; }
+.landing-paypal-receipt { position: relative; width: min(100%, 365px); min-width: 0; padding: 21px clamp(14px, 2.4vw, 28px) 30px; background: var(--surface); box-shadow: 0 12px 24px #0002; }
+.landing-paypal-receipt::after { content: ""; position: absolute; inset: auto 0 -5px; height: 6px; background: linear-gradient(135deg, var(--surface) 25%, transparent 25%) 0 0 / 12px 12px, linear-gradient(225deg, var(--surface) 25%, transparent 25%) 0 0 / 12px 12px; }
+.landing-paypal-receipt-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.landing-paypal-receipt-top strong { font-size: 19px; letter-spacing: -.045em; color: var(--accent); }
+.landing-paypal-purchase { padding-block: 16px 13px; border-bottom: 1px dashed var(--line); }
+.landing-paypal-purchase h3 { font-size: clamp(19px, 2vw, 25px); line-height: 1.2; letter-spacing: -.04em; }
+.landing-paypal-purchase p { font-size: 13px; color: var(--muted); margin-top: 3px; }
+.landing-paypal-purchase > strong { display: block; font-size: 32px; letter-spacing: -.06em; margin-top: 9px; }
+.landing-paypal-purchase small { color: var(--muted); font-size: 12px; letter-spacing: 0; }
+.landing-paypal-state dl { margin: 12px 0; font-size: 13px; }
+.landing-paypal-state dl > div { display: flex; justify-content: space-between; gap: 8px; padding-block: 3px; }
+.landing-paypal-state dt, .landing-paypal-state p, .landing-paypal-followup { color: var(--muted); }
+.landing-paypal-state dd { margin: 0; text-align: right; font-weight: 620; }
+.landing-paypal-state p { min-height: 5.7em; font-size: 13px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.landing-paypal-followup { margin-top: 24px; font-size: 14px; }
+.landing-paypal-followup strong { color: var(--ink); }
+@media (min-height: 640px) {
+  .landing-paypal-track::after { content: ""; display: block; height: clamp(1600px, 300svh, 3200px); }
+  .landing-paypal-inner { position: sticky; top: 24px; }
+  .landing-paypal-scroll-hint { display: flex; }
+}
+@media (max-width: 760px) {
+  .landing-paypal-inner { grid-template-columns: minmax(0, 1fr); gap: 13px; }
+  .landing-paypal-steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 9px; margin-block: 6px 8px; }
+  .landing-paypal-steps::before, .landing-paypal-steps .landing-paypal-step-arrow { display: none; }
+  .landing-paypal-steps button { grid-template-columns: 28px minmax(0, 1fr); gap: 7px; min-height: 43px; padding-right: 0; font-size: 13px; }
+  .landing-paypal-step-icon { width: 28px; height: 28px; }
+  .landing-paypal-stage { padding: 14px 12px 17px; }
+  .landing-paypal-receipt { padding-block: 12px 17px; }
+  .landing-paypal-purchase { padding-block: 8px 9px; }
+  .landing-paypal-purchase > strong { margin-top: 4px; font-size: 25px; }
+}
 .landing-records { padding-block: clamp(54px, 7vw, 100px); margin-bottom: clamp(56px, 7vw, 96px); border-block: 1px solid var(--line); background: var(--accent-soft); }
 .landing-records-heading { max-width: 760px; margin-bottom: 32px; }
 .landing-records-heading p { max-width: 620px; margin-top: 15px; color: var(--muted); }
@@ -239,9 +323,19 @@
   .landing-bottom { flex-direction: column; align-items: flex-start; }
 }
 @media (prefers-reduced-motion: no-preference) {
+  :root[data-theme-reveal]::view-transition { pointer-events: none; }
+  :root[data-theme-reveal]::view-transition-group(root),
+  :root[data-theme-reveal]::view-transition-old(root) { animation: none; }
+  :root[data-theme-reveal]::view-transition-old(root),
+  :root[data-theme-reveal]::view-transition-new(root) { mix-blend-mode: normal; }
+  :root[data-theme-reveal]::view-transition-new(root) { animation: landing-theme-reveal 460ms cubic-bezier(.2,.7,.2,1) both; }
   .landing :is(.landing-primary,.landing-secondary) { transition: transform 180ms ease, background-color 180ms ease; }
   .landing :is(.landing-primary,.landing-secondary):hover { transform: translateY(-3px); }
   .landing-questions summary svg { transition: rotate 180ms ease; }
+}
+@keyframes landing-theme-reveal {
+  from { clip-path: circle(0 at var(--theme-reveal-x) var(--theme-reveal-y)); }
+  to { clip-path: circle(var(--theme-reveal-radius) at var(--theme-reveal-x) var(--theme-reveal-y)); }
 }
 @media (max-width: 365px) {
   .landing .landing-actions { gap: 6px; }
