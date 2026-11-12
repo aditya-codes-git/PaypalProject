@@ -538,7 +538,7 @@ h1 { font-size: clamp(34px, 3.4vw, 50px); letter-spacing: -.045em; line-height: 
 .technical-details > .evidence-upload { margin-top: 10px; }
 @media (min-width: 1230px) {
   .workspace-layout.has-review { display: grid; grid-template-columns: minmax(315px, .56fr) minmax(0, 1fr); gap: clamp(18px, 2vw, 30px); align-items: start; }
-  .has-review .assistant-panel { position: sticky; top: 16px; gap: 15px; padding: 19px; }
+  .has-review .assistant-panel { gap: 15px; padding: 19px; }
   .has-review .assistant-panel h1 { font-size: clamp(25px, 2.4vw, 34px); }
   .has-review .assistant-detail { margin-top: 0; }
   .has-review .assistant-return { display: none; }
@@ -601,7 +601,21 @@ h1 { font-size: clamp(34px, 3.4vw, 50px); letter-spacing: -.045em; line-height: 
   .app-shell[data-signed-in] .main-shell { transition: width var(--sidebar-motion), margin-left var(--sidebar-motion); }
 }
 @media (min-width: 1230px) {
-  .has-review .assistant-panel { top: calc(var(--workspace-header-height) + 16px); }
+  .has-review .assistant-panel {
+    position: sticky;
+    top: calc(var(--workspace-header-height) + 16px);
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - var(--workspace-header-height) - 32px);
+  }
+  .has-review .assistant-panel > :not(.assistant-transcript) { flex-shrink: 0; }
+  .has-review .assistant-transcript { min-height: 0; }
+  .has-review .assistant-compose textarea { min-height: 68px; height: 68px; resize: none; }
+}
+@media (min-width: 1230px) and (max-height: 760px) {
+  .has-review .assistant-panel { gap: 10px; padding: 14px; }
+  .has-review .assistant-panel > header { gap: 8px; }
+  .has-review .assistant-shortcuts { padding-top: 8px; }
 }
 @media (max-width: 800px) {
   .app-shell { --workspace-header-height: 59px; }
