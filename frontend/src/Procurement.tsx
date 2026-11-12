@@ -2,11 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { cloudRequest, type Account, type Operation } from './cloud';
 import { useConfirmation } from './Confirmation';
 import { PurchaseDelivery, type Delivery } from './Fulfillment';
+import { ShortDeliveryRecovery } from './ShortDeliveryRecovery';
 import { money, type Plan } from './types';
+import type { AssistantReply } from './WorkspaceAssistant';
 
 type Intent = Delivery & { id: string; supplier: string; need_id: string; supply_name?: string; quantity: number; cost_cents: number; status: string; order_id: string | null; capture_id: string | null; refund_id?: string | null; approval_url: string | null; merchant_id: string; buyer_approved?: boolean; allocations?: { fund_id: string; amount_cents: number }[] };
 type Evidence = { id: string; filename: string; hash: string; confirmed: number[]; pages: string[]; metadata: { model: string; usage: { total_tokens?: number } }; proposals: { warnings: string[]; funds: { name: string; amount_cents: number | null; categories: string[]; quote: string; page: number; requires_review: boolean; warnings: string[] }[] } };
-export type Ledger = { version?: number; purchases: Intent[]; events: { id: string; at: string; actor: string; kind: string; message: string }[]; documents: Evidence[]; balances: Record<string, { opening_cents: number; reserved_cents: number; spent_cents: number; available_cents: number }> };
+export type Ledger = { version?: number; closeout?: { at: string; revision: number; version: number }; purchases: Intent[]; events: { id: string; at: string; actor: string; kind: string; message: string }[]; documents: Evidence[]; balances: Record<string, { opening_cents: number; reserved_cents: number; spent_cents: number; available_cents: number }> };
 
 export function useProcurement(account: Account | null, operation: Operation | null, refreshKey: number) {
   const [ledger, setLedger] = useState<Ledger | null>(null);
@@ -25,20 +27,23 @@ export function useProcurement(account: Account | null, operation: Operation | n
     } catch (err) { if (activeOperation.current === operationId) setError(err instanceof Error ? err.message : 'Cannot load commitments.'); }
   }, [client, operationId]);
   useEffect(() => { setLedger(null); void refresh(); }, [refresh, operation?.revision, refreshKey]);
-  async function action(path: string, body?: unknown) {
+  async function action<T = any>(path: string, body?: unknown, inlineError = false) {
     if (!account || !operationId) throw new Error('Save an operation first.');
     setBusy(true); setError('');
     try {
-      const result = await cloudRequest<any>(account, `/${operationId}${path}`, 'POST', body ?? {});
+      const result = await cloudRequest<T>(account, `/${operationId}${path}`, 'POST', body ?? {});
       await refresh();
       return result;
-    } catch (err) { const message = err instanceof Error ? err.message : 'The action could not be completed.'; setError(message); throw err; }
+    } catch (err) {
+      if (!inlineError) setError(err instanceof Error ? err.message : 'The action could not be completed.');
+      throw err;
+    }
     finally { setBusy(false); }
   }
   return { ledger, busy, error, refresh, action };
 }
 
-type Procurement = ReturnType<typeof useProcurement>;
+export type Procurement = ReturnType<typeof useProcurement>;
 
 const purchaseStatus: Record<string, string> = {
   reserved: 'Ready for checkout',
@@ -54,32 +59,43 @@ const purchaseStatus: Record<string, string> = {
   refunded: 'Refunded',
 };
 
-function purchaseStatusLabel(status: string) {
+export function purchaseStatusLabel(status: string) {
   return purchaseStatus[status] ?? status.replaceAll('_', ' ');
 }
 
-export function ApproveAction({ procurement, plan, operation, disabled, onApproved }: { procurement: Procurement; plan: Plan; operation: Operation | null; disabled: boolean; onApproved: () => void }) {
+export function ApproveAction({ procurement, plan, operation, disabled, replacementFor, onApproved }: { procurement: Procurement; plan: Plan; operation: Operation | null; disabled: boolean; replacementFor?: string; onApproved: () => void }) {
   const confirm = useConfirmation();
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
-  useEffect(() => setRequestId(crypto.randomUUID()), [plan.id]);
-  return <div className="approval-action"><p>Approval sets this money aside. You can pay for each purchase separately.</p>{procurement.error && <p className="error-banner" role="alert">{procurement.error}</p>}<button className="button primary full-width" disabled={disabled || procurement.busy || !operation || !plan.purchases.length} onClick={async () => {
+  const [approvalError, setApprovalError] = useState('');
+  useEffect(() => { setRequestId(crypto.randomUUID()); setApprovalError(''); }, [plan.id]);
+  return <div className="approval-action"><p>{replacementFor ? 'Approval sets aside the funds. PayPal checkout is next.' : 'Approval sets this money aside. You can pay for each purchase separately.'}</p>{approvalError && <p className="error-banner" role="alert">{approvalError}</p>}<button className="button primary full-width" disabled={disabled || procurement.busy || !operation || !plan.purchases.length} onClick={async () => {
     const count = plan.purchases.length;
     if (!await confirm({
-      title: 'Approve this purchasing plan?',
+      title: replacementFor ? 'Approve these replacements?' : 'Approve this purchasing plan?',
       message: `Set aside ${money(plan.total_cost_cents)} for ${count} ${count === 1 ? 'purchase' : 'purchases'}. You can pay for them separately.`,
-      action: 'Approve plan',
+      action: replacementFor ? 'Approve replacements' : 'Approve plan',
     })) return;
-    void procurement.action('/approve', { expected_revision: operation!.revision, input_digest: plan.input_digest, request_id: requestId, purchases: plan.purchases }).then(onApproved).catch(() => {});
-  }}>{procurement.busy ? 'Reserving funds…' : 'Approve and reserve funds'}</button></div>;
+    setApprovalError('');
+    void procurement.action('/approve', {
+      expected_revision: operation!.revision, input_digest: plan.input_digest, request_id: requestId, purchases: plan.purchases,
+      ...(replacementFor ? { replaces_purchase_id: replacementFor } : {}),
+    }, true).then(onApproved).catch(err => setApprovalError(err instanceof Error ? err.message : 'Could not reserve the funds.'));
+  }}>{procurement.busy ? 'Reserving funds…' : replacementFor ? 'Approve replacement plan' : 'Approve and reserve funds'}</button></div>;
 }
 
-export function Purchases({ procurement, operation, clean, onPlan, onStatusCheck }: {
+export function Purchases({ procurement, operation, clean, onPlan, onStatusCheck, onEditOffers, onEditFunding, suggested }: {
   procurement: Procurement; operation: Operation; clean: boolean; onPlan: () => void; onStatusCheck: () => void;
+  onEditOffers: (purchaseId: string) => void; onEditFunding: (fundId: string | null, purchaseId: string) => void;
+  suggested?: { reply: AssistantReply; source: string } | null;
 }) {
   const confirm = useConfirmation();
   const ledger = procurement.ledger;
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
+  const purchaseId = suggested?.reply.purchase_id;
+  useEffect(() => {
+    if (purchaseId) document.getElementById(`purchase-${purchaseId}`)?.focus();
+  }, [purchaseId, !!ledger]);
 
   async function downloadRecord() {
     if (!ledger) return;
@@ -95,13 +111,14 @@ export function Purchases({ procurement, operation, clean, onPlan, onStatusCheck
     }
   }
 
-  return <section className="card procurement-panel"><div className="card-heading"><div><h2>Pay for approved items</h2><p>PayPal uses test money in this workspace.</p></div><button className="button subtle" onClick={() => void procurement.refresh()} disabled={procurement.busy}>Refresh status</button></div>
+  return <section className="card procurement-panel"><div className="card-heading"><div><h2>Payments and deliveries</h2><p>Pay with PayPal sandbox and track what arrives.</p></div><button className="button subtle" onClick={() => void procurement.refresh()} disabled={procurement.busy}>Refresh status</button></div>
     {!clean && <p className="warning-banner">Save your changes before paying.</p>}
     {procurement.error && <div className="error-banner" role="alert">{procurement.error}</div>}
     {ledger && <div className="balance-grid">{Object.entries(ledger.balances).map(([id, b]) => <article key={id}><strong>{operation.scenario.funds.find(f => f.id === id)?.name ?? id}</strong><span>{money(b.available_cents)} available</span><small>{money(b.reserved_cents)} reserved · {money(b.spent_cents)} spent</small></article>)}</div>}
     {!ledger && !procurement.error && <p role="status">Loading purchases…</p>}
     {ledger && !ledger.purchases.length && <div className="empty-state"><h3>No approved purchases yet</h3><p>Generate a plan and approve it to see what you can pay for here.</p><button className="button subtle" onClick={onPlan}>Go to planner</button></div>}
-    {ledger?.purchases.map(p => <article className="purchase-card" key={p.id}><div className="purchase-heading"><div><h3>{p.supplier}</h3><p>{p.quantity} × {operation.scenario.needs.find(n => n.id === p.need_id)?.name ?? p.need_id}</p></div><strong>{money(p.cost_cents)}</strong></div><p><span className="tag">{purchaseStatusLabel(p.status)}</span></p>
+    {ledger?.purchases.map(p => <article className="purchase-card" id={`purchase-${p.id}`} tabIndex={-1} key={p.id}><div className="purchase-heading"><div><h3>{p.supplier}</h3><p>{p.quantity} × {p.supply_name ?? operation.scenario.needs.find(n => n.id === p.need_id)?.name ?? p.need_id}</p></div><strong>{money(p.cost_cents)}</strong></div><p><span className="tag">{purchaseStatusLabel(p.status)}</span></p>
+    {p.replaces_purchase_id && <p><a href={`#purchase-${p.replaces_purchase_id}`}>Replacement for {ledger.purchases.find(row => row.id === p.replaces_purchase_id)?.supplier ?? 'original purchase'}</a></p>}
     {p.order_id && <details className="technical-details"><summary>PayPal details</summary><small className="provider-reference">Test recipient: {p.merchant_id ? 'Configured supplier account' : 'Default test account'}<br />Order: {p.order_id}{p.capture_id && <><br />Payment: {p.capture_id}</>}</small></details>}<div className="action-row">
       {p.status === 'reserved' && <><button className="button primary" disabled={!clean || procurement.busy} onClick={() => void procurement.action(`/purchases/${p.id}/checkout`).then(result => { if (result.approval_url) window.location.assign(result.approval_url); }).catch(() => {})}>Pay with PayPal</button><button className="button subtle" disabled={procurement.busy} onClick={async () => {
         if (await confirm({
@@ -126,7 +143,20 @@ export function Purchases({ procurement, operation, clean, onPlan, onStatusCheck
           action: 'Request refund',
         })) void procurement.action(`/purchases/${p.id}/refund`).catch(() => {});
       }}>Request full refund</button>}
-    </div><PurchaseDelivery purchase={p} busy={procurement.busy} submit={(path, body) => procurement.action(`/purchases/${p.id}/${path}`, body)} /></article>)}
+    </div>
+    <ShortDeliveryRecovery key={p.id === purchaseId && suggested?.reply.action === 'delivery' ? suggested.source || 'assistant-recovery' : 'recovery'}
+      openReview={p.id === purchaseId && suggested?.reply.action === 'delivery' && !!p.delivery_closed}
+      suggested={p.id === purchaseId && suggested?.reply.receipt?.short ? {
+        draft: suggested.reply.receipt, source: suggested.source, analysis: suggested.reply.short_delivery_draft ?? undefined,
+      } : undefined}
+      purchase={p} procurement={procurement} operation={operation} clean={clean}
+      onEditOffers={() => onEditOffers(p.id)} onEditFunding={fundId => onEditFunding(fundId, p.id)}
+      renderApproval={(plan, disabled, onApproved) => <ApproveAction procurement={procurement} plan={plan} operation={operation}
+        disabled={disabled} replacementFor={p.id} onApproved={onApproved} />} />
+    <PurchaseDelivery key={p.id === purchaseId ? suggested?.source : 'delivery'} purchase={p} busy={procurement.busy}
+      draft={p.id === purchaseId && !suggested?.reply.receipt?.short ? suggested?.reply.receipt ?? undefined : undefined}
+      open={p.id === purchaseId && suggested?.reply.action === 'delivery' && !suggested.reply.receipt?.short}
+      submit={(path, body) => procurement.action(`/purchases/${p.id}/${path}`, body)} /></article>)}
     {exportError && <p className="error-banner" role="alert">{exportError}</p>}
     {ledger && <button className="button subtle" disabled={exporting || procurement.busy} onClick={() => void downloadRecord()}>{exporting ? 'Preparing PDF…' : 'Download purchase record (PDF)'}</button>}
   </section>;
@@ -136,15 +166,11 @@ export function DurableActivity({ procurement }: { procurement: Procurement }) {
   return <section className="card"><div className="card-heading"><div><h2>Saved decisions and payments</h2></div></div>{procurement.ledger?.events.length ? <ol className="activity-list">{procurement.ledger.events.map(e => <li key={e.id}><span className="activity-dot" /><div><strong>{e.message}</strong></div><time>{new Date(e.at).toLocaleString()}</time></li>)}</ol> : <div className="empty-state"><p>Approved purchases, confirmed grants and payments will appear here.</p></div>}</section>;
 }
 
-export function EvidencePanel({ procurement, operation, clean, reload }: { procurement: Procurement; operation: Operation; clean: boolean; reload: () => Promise<void> }) {
+export function EvidencePanel({ procurement, operation, clean, reload, pastedText = '' }: { procurement: Procurement; operation: Operation; clean: boolean; reload: () => Promise<void>; pastedText?: string }) {
   const confirm = useConfirmation();
   const [localError, setLocalError] = useState('');
   const [loadingFile, setLoadingFile] = useState(false);
-  return <section className="card procurement-panel"><div className="card-heading"><div><h2>Upload a grant document</h2><p>AI suggests the grant amount and what it can pay for. Review the quoted text before adding the grant to your funding.</p></div></div><div className="evidence-upload"><label>Choose a grant file<input type="file" accept=".txt,.pdf" disabled={!clean || procurement.busy || loadingFile} onChange={async e => {
-    const input = e.currentTarget;
-    const file = input.files?.[0];
-    if (!file) return;
-    input.value = '';
+  async function analyzeGrant(file: File) {
     setLocalError('');
     if (file.size > 2_000_000) { setLocalError('Choose a document smaller than 2 MB.'); return; }
     if (!await confirm({
@@ -156,7 +182,28 @@ export function EvidencePanel({ procurement, operation, clean, reload }: { procu
     try { const reader = new FileReader(); const content = await new Promise<string>((resolve, reject) => { reader.onload = () => resolve(String(reader.result).split(',')[1]); reader.onerror = reject; reader.readAsDataURL(file); }); await procurement.action('/documents', { filename: file.name, content_base64: content }); }
     catch (err) { setLocalError(err instanceof Error ? err.message : 'Could not read the file.'); }
     finally { setLoadingFile(false); }
-  }} /></label><p>Choose a .txt file or a PDF with selectable text, up to 2 MB and 20 pages.</p>{!clean && <p>Save your changes before uploading or confirming a grant.</p>}{(loadingFile || procurement.busy) && <p role="status">Working on your document…</p>}</div>
+  }
+  const filePicker = <div className="evidence-upload"><label>Choose a grant file<input type="file" accept=".txt,.pdf" disabled={!clean || procurement.busy || loadingFile} onChange={e => {
+    const input = e.currentTarget;
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) void analyzeGrant(file);
+  }} /></label><p>Choose a .txt file or a PDF with selectable text, up to 2 MB and 20 pages.</p></div>;
+  return <section className="card procurement-panel"><div className="card-heading"><div>
+    <h2>{pastedText ? 'Review pasted grant terms' : 'Upload a grant document'}</h2>
+    <p>{pastedText ? 'Find the grant amount and spending rules in your message.' : 'AI suggests the grant amount and what it can pay for. Review the quoted text before adding the grant to your funding.'}</p>
+  </div></div>
+    {pastedText ? <>
+      <div className="evidence-pasted">
+        <blockquote>{pastedText}</blockquote>
+        <button className="button primary" disabled={!clean || procurement.busy || loadingFile} onClick={() => {
+          void analyzeGrant(new File([pastedText], 'Pasted grant terms.txt', { type: 'text/plain' }));
+        }}>Analyze pasted grant terms</button>
+      </div>
+      <details className="technical-details"><summary>Upload a grant file instead</summary>{filePicker}</details>
+    </> : filePicker}
+    {!clean && <p className="warning-banner">Save your changes before uploading or confirming a grant.</p>}
+    {(loadingFile || procurement.busy) && <p role="status">Analyzing grant terms…</p>}
     {(localError || procurement.error) && <div className="error-banner" role="alert">{localError || procurement.error}</div>}
     {procurement.ledger?.documents.map(document => <article className="evidence-document" key={document.id}><h3>{document.filename}</h3><details className="technical-details"><summary>AI extraction details</summary><small>{document.metadata.model} · {document.metadata.usage.total_tokens ?? '—'} tokens · Document ID {document.hash.slice(0, 12)}</small></details>{document.proposals.warnings.map((w, i) => <p className="warning-banner" key={i}>{w}</p>)}{!document.proposals.funds.length && <p>No grant terms were found. You can add funding in Plan settings.</p>}{document.proposals.funds.map((proposal, index) => <Proposal key={index} proposal={proposal} document={document} index={index} procurement={procurement} operation={operation} clean={clean} reload={reload} />)}</article>)}
   </section>;
@@ -171,12 +218,18 @@ function Proposal({ proposal, document, index, procurement, operation, clean, re
   return <form className="evidence-proposal" onSubmit={e => { e.preventDefault(); void procurement.action(`/documents/${document.id}/confirm`, { expected_revision: operation.revision, proposal_index: index, name, amount_cents: Math.round(Number(amount) * 100), categories, acknowledge_review: acknowledge }).then(reload).catch(() => {}); }}><blockquote>{proposal.quote}<cite>Page {proposal.page}</cite></blockquote><details><summary>Read the full page</summary><pre>{document.pages[proposal.page - 1]}</pre></details>{proposal.requires_review && <p className="warning-banner">Manual review required: {proposal.warnings.join(' ') || 'Check the complete source conditions before confirmation.'}</p>}{confirmed ? <p className="grant-confirmed" role="status">Added to funding</p> : <><div className="input-grid"><label>Grant name<input value={name} maxLength={100} required onChange={e => setName(e.target.value)} /></label><label>Grant amount (USD)<input type="number" min="0" max="1000000" step="0.01" required value={amount} onChange={e => setAmount(e.target.value)} /></label></div><fieldset><legend>What can this grant pay for?</legend>{[...new Set(operation.scenario.needs.map(n => n.category))].map(category => <label className="check-label" key={category}><input type="checkbox" checked={categories.includes(category)} onChange={e => setCategories(previous => e.target.checked ? [...previous, category] : previous.filter(c => c !== category))} />{category}</label>)}</fieldset><label className="check-label"><input type="checkbox" checked={acknowledge} onChange={e => setAcknowledge(e.target.checked)} />I checked the document and confirmed the amount and spending rules.</label><button className="button primary" disabled={!clean || procurement.busy || !acknowledge || !categories.length}>Confirm and add grant</button></>}</form>;
 }
 
-export function FundingLedger({ procurement, operation }: { procurement: Procurement; operation: Operation }) {
+export function FundingLedger({ procurement, operation, initialFund = null }: { procurement: Procurement; operation: Operation; initialFund?: string | null }) {
   const confirm = useConfirmation();
-  const [fund, setFund] = useState(operation.scenario.funds[0]?.id ?? '');
+  const preferredFund = operation.scenario.funds.find(source => source.id === initialFund);
+  const [fund, setFund] = useState(preferredFund?.id ?? operation.scenario.funds[0]?.id ?? '');
   const [amount, setAmount] = useState(''); const [reason, setReason] = useState('');
-  if (!procurement.ledger || !Object.keys(procurement.ledger.balances).length) return null;
-  return <section className="card procurement-panel"><h2>Change a budget</h2><p>Enter the new total, including money already set aside or spent.</p><form className="input-grid" onSubmit={async e => {
+  const heading = useRef<HTMLHeadingElement>(null);
+  const hasBalances = !!procurement.ledger && Object.keys(procurement.ledger.balances).length > 0;
+  useEffect(() => {
+    if (preferredFund && hasBalances) heading.current?.focus();
+  }, [preferredFund?.id, hasBalances]);
+  if (!hasBalances) return null;
+  return <section className="card procurement-panel"><h2 ref={heading} tabIndex={-1}>Change a budget</h2><p>Enter the new total, including money already set aside or spent.</p><form className="input-grid" onSubmit={async e => {
     e.preventDefault();
     const openingCents = Math.round(Number(amount) * 100);
     if (!await confirm({

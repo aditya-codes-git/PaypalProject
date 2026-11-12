@@ -69,9 +69,9 @@ export function WorkspaceGate() {
     window.history.replaceState(window.history.state, '', url);
     setGuest(false);
   }} />;
-  if (session && client) return <App key={session.user.id} account={{ client, session }} onExit={async () => {
+  if (session && client) return <App key={session.user.id} account={{ client, session }} onExit={async reason => {
     const { error: signOutError } = await client.auth.signOut({ scope: 'local' });
-    if (signOutError) setError('Signed out on this device, but the server could not confirm session revocation.');
+    if (signOutError && reason !== 'deleted') setError('Signed out on this device, but the server could not confirm session revocation.');
     setSession(null);
   }} />;
   return <SignIn client={client} initialError={error} onGuest={() => setGuest(true)} onRetry={() => setAttempt(n => n + 1)} />;
@@ -108,5 +108,39 @@ function SignIn({ client, initialError, onGuest, onRetry }: { client: SupabaseCl
     } catch { setError('The sign-in service could not be reached. Try again.'); }
     finally { setBusy(false); }
   }
-  return <div className="auth-shell"><div className="auth-appearance"><ThemeToggle /></div><section className="auth-intro"><Brand className="auth-brand" /><h1>Plan what to buy for a relief operation</h1><p>Match what households need with available supplies and funding.</p><AuthArtwork /></section><section className="auth-card"><h2>Sign in to ReliefOps</h2><p>Sign in to save an operation, review grants and approve purchases.</p>{(error || initialError) && <div className="error-banner" role="alert">{error || initialError}</div>}<button className="button google-button full-width" type="button" disabled={busy || googleBusy || !client} onClick={googleSignIn}><span className="google-mark" aria-hidden="true">G</span>{googleBusy ? 'Connecting to Google…' : 'Continue with Google'}</button><div className="auth-or"><span>or sign in with email</span></div><form onSubmit={submit}><label>Email address<input autoComplete="username" type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" /></label><label>Password<input autoComplete="current-password" type="password" required value={password} onChange={e => setPassword(e.target.value)} /></label><button className="button primary full-width" type="submit" disabled={busy || googleBusy || !client}>{busy ? 'Signing in…' : 'Sign in'}</button></form>{!client && <><p className="auth-help">Sign-in is unavailable. You can still build a plan without an account.</p><button className="text-button" onClick={onRetry}>Retry connection</button></>}<div className="auth-divider" /><button className="button subtle full-width" onClick={onGuest}>Start without signing in</button><small className="auth-sample-note">Enter your own data. Guest plans are not saved.</small></section></div>;
+  return <main className="auth-shell">
+    <div className="auth-appearance"><ThemeToggle animate /></div>
+    <section className="auth-intro">
+      <a href="/" className="auth-brand" aria-label="ReliefOps home"><Brand /></a>
+      <div className="auth-story">
+        <h2>From urgent needs to a <span>purchasing plan.</span></h2>
+        <p>See what you can buy with your grants, supplier stock, and delivery deadline.</p>
+        <AuthArtwork />
+      </div>
+    </section>
+    <section className="auth-card" aria-labelledby="sign-in-title">
+      <div className="auth-heading">
+        <h1 id="sign-in-title">Sign in to ReliefOps</h1>
+        <p>Save operations, review grants, and approve purchases.</p>
+      </div>
+      {(error || initialError) && <div className="error-banner" role="alert">{error || initialError}</div>}
+      <button className="button google-button full-width" type="button" disabled={busy || googleBusy || !client} onClick={googleSignIn}>
+        <span className="google-mark" aria-hidden="true">G</span>{googleBusy ? 'Connecting to Google…' : 'Continue with Google'}
+      </button>
+      <div className="auth-or"><span>or sign in with email</span></div>
+      <form onSubmit={submit}>
+        <label>Email address<input autoComplete="username" type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" /></label>
+        <label>Password<input autoComplete="current-password" type="password" required value={password} onChange={e => setPassword(e.target.value)} /></label>
+        <button className="button primary full-width" type="submit" disabled={busy || googleBusy || !client}>{busy ? 'Signing in…' : 'Sign in'}</button>
+      </form>
+      {!client && <div>
+        <p className="auth-help">Sign-in is unavailable. You can still build a guest plan.</p>
+        <button className="text-button" onClick={onRetry}>Retry connection</button>
+      </div>}
+      <div className="auth-guest">
+        <button className="button subtle full-width" onClick={onGuest}>Start without signing in</button>
+        <small className="auth-sample-note">Guest plans are temporary.</small>
+      </div>
+    </section>
+  </main>;
 }

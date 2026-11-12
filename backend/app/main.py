@@ -19,6 +19,9 @@ from .finance import router as finance_router
 from .payments import router as payments_router
 from .documents import router as documents_router
 from .fulfillment import router as fulfillment_router
+from .short_delivery import router as short_delivery_router
+from .assistant import router as assistant_router
+from .account import router as account_router
 from .limits import limits
 
 @asynccontextmanager
@@ -36,12 +39,15 @@ async def lifespan(app):
 app = FastAPI(title="ReliefOps", version="0.3.0", lifespan=lifespan, description="Evidence, constrained planning, approvals and PayPal sandbox procurement.")
 app.middleware("http")(limits)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", os.getenv("APP_ORIGIN", "http://127.0.0.1:5173")],
-                   allow_methods=["GET", "POST", "PATCH"], allow_headers=["Content-Type", "Authorization"])
+                   allow_methods=["GET", "POST", "PATCH", "DELETE"], allow_headers=["Content-Type", "Authorization"])
 app.include_router(cloud_router)
 app.include_router(finance_router)
 app.include_router(payments_router)
 app.include_router(documents_router)
 app.include_router(fulfillment_router)
+app.include_router(short_delivery_router)
+app.include_router(assistant_router)
+app.include_router(account_router)
 
 
 @app.get("/api/public-config")

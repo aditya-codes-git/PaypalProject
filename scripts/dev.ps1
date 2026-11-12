@@ -9,7 +9,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $projectRoot 'frontend\node_modules'
 }
 $logPath = Join-Path $projectRoot '.tools'
 New-Item -ItemType Directory -Force -Path $logPath | Out-Null
-$backendProcess = Start-Process -FilePath $pythonPath -ArgumentList @('-m', 'uvicorn', 'app.main:app', '--app-dir', 'backend', '--host', '127.0.0.1', '--port', '8000') -WorkingDirectory $projectRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logPath 'api.stdout.log') -RedirectStandardError (Join-Path $logPath 'api.stderr.log')
+$backendProcess = Start-Process -FilePath $pythonPath -ArgumentList @('-m', 'uvicorn', 'app.main:app', '--app-dir', 'backend', '--host', '127.0.0.1', '--port', '8000', '--reload', '--reload-dir', 'backend/app') -WorkingDirectory $projectRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logPath 'api.stdout.log') -RedirectStandardError (Join-Path $logPath 'api.stderr.log')
 Write-Host 'ReliefOps: http://127.0.0.1:5173'
 Write-Host 'API logs: .tools/api.stderr.log. Press Ctrl+C to stop.'
 try {
@@ -21,5 +21,5 @@ try {
 }
 finally {
     $backendProcess.Refresh()
-    if (-not $backendProcess.HasExited) { Stop-Process -Id $backendProcess.Id }
+    if (-not $backendProcess.HasExited) { & taskkill.exe /PID $backendProcess.Id /T /F | Out-Null }
 }

@@ -56,6 +56,10 @@ supabase functions deploy finance-gateway --project-ref YOUR_PROJECT_REF --no-ve
 
 The function requires the platform-provided `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`; do not copy either service-role value into frontend configuration. See the official [function deployment guide](https://supabase.com/docs/guides/functions/deploy) and [CLI reference](https://supabase.com/docs/reference/cli/supabase-functions-deploy) if your installed CLI differs.
 
+For self-service account deletion, apply [account.sql](account.sql) after the finance schema and redeploy the updated finance gateway. This adds the service-only deletion function. It checks the confirmed email and active account session and uses the same operation locks as payment writes. Existing account records are affected only when an authenticated user explicitly confirms deletion.
+
+Apply [project_deletion.sql](project_deletion.sql) after the finance schema to enable deleting individual projects from **Profile → Data**. The owner policy scopes deletes, and a database trigger protects pending PayPal transactions.
+
 6. Restart the app backend. Sign in, save an operation and open Purchases. Its initially empty financial state should load without a gateway error. Generate/review/approve a plan and reload to verify persistence.
 
 The root `.env` must remain Git-ignored. When rotating the scoped key, update the backend secret and private database hash together; expect financial commands to fail safely during a mismatch. Never print the key or put it into SQL migration files.

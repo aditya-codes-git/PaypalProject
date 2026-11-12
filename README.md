@@ -34,6 +34,8 @@ cd ..
 
 Open **http://127.0.0.1:5173**. API documentation is at **http://127.0.0.1:8000/docs**. Ctrl+C stops both services. This checkout already has dependencies installed; start it with the final command.
 
+Signed-in users start in **Ask ReliefOps**. Describe an operation, paste a supplier quote or delivery update, then open the proposed action to review it. **Profile → Workspace mode → Manual entry** opens the form-based dashboard with the same saved operations. Conversations are kept in the current browser tab through checkout and cleared on sign-out.
+
 The root `.env` is private and Git-ignored. Preserve any existing values. Create the file only if absent, and use [.env.example](.env.example) for variable names. Never put server secrets in `VITE_` variables or commit them. Restart the backend after configuration changes.
 
 | Configuration | Purpose |
@@ -64,6 +66,14 @@ For a quick public check, choose **Start without signing in** and enter the same
 Before submission, verify the hosted signed-in workflow with a dedicated test account and PayPal sandbox buyer, check judge access in a clean browser, and record a public video under three minutes. See [submission copy and recording cues](SUBMISSION_KIT.md).
 
 Unmapped fictional suppliers all use the application's default sandbox merchant. Distinct recipients require controlled sandbox merchant mappings; this is not a marketplace onboarding integration. Prices must include all payable unit costs; tax/shipping are not calculated separately. Stock and delivery are reported inputs.
+
+### Show AI-assisted short-delivery recovery
+
+Use 12 households, one blanket per household, and a two-day deadline. Add a $132 shelter budget, an offer for 12 blankets at $8 each, and a second supplier offering four blankets at $9 each within two days. Approve and pay for the $96 purchase through PayPal sandbox.
+
+On the paid purchase, select **Resolve short delivery** and analyze this fictional message: “We delivered 8 of the 12 blankets. The remaining 4 will not ship.” Confirm eight usable units and enter a receipt reference and location. The recovery comparison should show eight households covered now, 12 with the replacement, and $36 for four blankets. Approve and pay for the replacement in PayPal sandbox. Both purchases appear in the PDF, linked to the original delivery and the reviewed supplier excerpt.
+
+To show the funding blocker, start with $100 of shelter funding. The $36 replacement needs $32 more in eligible funding, even if a separate fund has money available for a different supply category.
 
 After the first financial initialization, draft funding fields cannot replenish committed money. Record an explicit opening-allocation adjustment with a reason; it cannot lower a pool below existing commitments.
 

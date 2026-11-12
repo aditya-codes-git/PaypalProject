@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Barrier
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import psycopg
@@ -45,13 +45,16 @@ def database_url():
         end $$;
         create schema auth; create schema extensions;
         create extension pgcrypto with schema extensions;
-        create table auth.users(id uuid primary key);
+        create table auth.users(id uuid primary key, email text);
+        create table auth.sessions(id uuid primary key, user_id uuid not null references auth.users(id) on delete cascade);
         create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true),'')::uuid $$;
         grant usage on schema auth to anon, authenticated;
         grant execute on function auth.uid() to anon, authenticated;
         """)
         connection.execute(Path("database/operations.sql").read_text(encoding="utf-8"))
         connection.execute(Path("database/finance.sql").read_text(encoding="utf-8"))
+        connection.execute(Path("database/account.sql").read_text(encoding="utf-8"))
+        connection.execute(Path("database/project_deletion.sql").read_text(encoding="utf-8"))
         connection.execute("insert into reliefops_private.server_credential values(true,%s)", (hashlib.sha256(b"local-server-test").hexdigest(),))
     yield url
     with psycopg.connect(base, autocommit=True) as connection:
@@ -103,6 +106,72 @@ def approved(w):
     request = approval_for(w)
     finance.approve(w.id, request, w.session)
     return finance.read(w.id, w.owner)["state"]["purchases"][0]
+
+
+def test_account_deletion_requires_the_owners_session_and_cascades_only_their_records(workspace):
+    w = workspace
+    purchase = approved(w)
+    owner_session, other, other_session = map(str, (uuid4(), uuid4(), uuid4()))
+    email = "delete-me@example.test"
+    with psycopg.connect(w.db, autocommit=True) as connection:
+        connection.execute("update auth.users set email=%s where id=%s", (email, w.owner))
+        connection.execute("insert into auth.users(id,email) values (%s,'other@example.test')", (other,))
+        connection.execute("insert into auth.sessions values (%s,%s),(%s,%s)", (owner_session, w.owner, other_session, other))
+
+        def delete(session_id=owner_session, confirmation=email, key="local-server-test"):
+            return connection.execute("select public.reliefops_delete_account(%s,%s,%s,%s)",
+                                      (key, w.owner, session_id, confirmation)).fetchone()[0]
+
+        connection.execute("set role authenticated")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            delete()
+        connection.execute("set role service_role")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            delete(other_session)
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            delete(key="wrong-key")
+        with pytest.raises(psycopg.errors.InvalidParameterValue):
+            delete(confirmation="wrong@example.test")
+        data = finance.read(w.id, w.owner)
+        finance.find_purchase(data, purchase["id"])["status"] = "awaiting_approval"
+        finance.write(data, w.owner)
+        with pytest.raises(psycopg.errors.ObjectNotInPrerequisiteState):
+            delete()
+        data = finance.read(w.id, w.owner)
+        finance.find_purchase(data, purchase["id"])["status"] = "paid"
+        finance.write(data, w.owner)
+        assert delete() == {"deleted": True}
+        connection.execute("reset role")
+        assert connection.execute("select id from auth.users where id in (%s,%s)", (w.owner, other)).fetchall() == [(UUID(other),)]
+        assert not connection.execute("select id from auth.sessions where id=%s", (owner_session,)).fetchall()
+        assert not connection.execute("select id from public.operations where id=%s", (w.id,)).fetchall()
+        assert not connection.execute("select operation_id from public.operation_finance where operation_id=%s", (w.id,)).fetchall()
+        connection.execute("delete from auth.users where id=%s", (other,))
+
+
+def test_project_deletion_is_owner_scoped_and_protects_pending_payments(workspace):
+    w = workspace
+    purchase = approved(w)
+    other = str(uuid4())
+    with psycopg.connect(w.db, autocommit=True) as connection:
+        connection.execute("insert into auth.users(id) values (%s)", (other,))
+        connection.execute("set role authenticated")
+        connection.execute("select set_config('request.jwt.claim.sub', %s, false)", (other,))
+        assert connection.execute("delete from public.operations where id=%s returning id", (w.id,)).fetchall() == []
+        connection.execute("select set_config('request.jwt.claim.sub', %s, false)", (w.owner,))
+        data = finance.read(w.id, w.owner)
+        finance.find_purchase(data, purchase["id"])["status"] = "capturing"
+        finance.write(data, w.owner)
+        with pytest.raises(psycopg.errors.ObjectNotInPrerequisiteState):
+            connection.execute("delete from public.operations where id=%s", (w.id,))
+        data = finance.read(w.id, w.owner)
+        finance.find_purchase(data, purchase["id"])["status"] = "paid"
+        finance.write(data, w.owner)
+        assert connection.execute("delete from public.operations where id=%s returning id", (w.id,)).fetchall() == [(UUID(w.id),)]
+        connection.execute("reset role")
+        assert connection.execute("select id from auth.users where id=%s", (w.owner,)).fetchone() == (UUID(w.owner),)
+        assert not connection.execute("select operation_id from public.operation_finance where operation_id=%s", (w.id,)).fetchall()
+        connection.execute("delete from auth.users where id=%s", (other,))
 
 
 def test_closed_short_delivery_replans_only_missing_units_and_preserves_finances(workspace, monkeypatch):

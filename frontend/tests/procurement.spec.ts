@@ -32,7 +32,7 @@ test('review, approve, reserve, reload and cancel an unsubmitted purchase', asyn
   expect(ledger.purchases).toHaveLength(0);
   await approve.click();
   await confirmation.getByRole('button', { name: 'Approve plan' }).click();
-  await expect(page.getByRole('heading', { name: 'Pay for approved items' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Payments and deliveries' })).toBeVisible();
   await expect(page.getByText('$360 reserved · $0 spent')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Pay with PayPal' })).toHaveCount(3);
   await page.reload();

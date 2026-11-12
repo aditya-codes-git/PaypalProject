@@ -24,11 +24,11 @@ async def limits(request: Request, call_next):
                 return JSONResponse({"detail": "Request body exceeds the 3 MB limit."}, status_code=413)
         request._body = bytes(body)
         if request.method == "POST" and path != "/api/paypal/webhook":
-            bucket = "ai" if path.endswith("/documents") else "compute" if path.endswith(("/plan", "/plans", "/approve")) else "write"
+            bucket = "assistant" if path.endswith("/assistant") else "ai" if path.endswith(("/documents", "/short-delivery/analyze")) else "compute" if path.endswith(("/plan", "/plans", "/approve")) else "write"
             key = (request.client.host if request.client else "unknown", bucket)
             current = time.monotonic()
             recent = [t for t in COUNTS.pop(key, []) if current - t < 60]
-            cap = {"ai": 2, "compute": 30, "write": 60}[bucket]
+            cap = {"assistant": 6, "ai": 2, "compute": 30, "write": 60}[bucket]
             COUNTS[key] = recent
             while len(COUNTS) > 2000:
                 COUNTS.popitem(last=False)

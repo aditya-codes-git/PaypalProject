@@ -76,7 +76,20 @@ export function useSavedWorkspace(account: Account | null, restore: (scenario: S
     restoreRef.current(emptyScenario(), null, null);
   }
 
-  return { operations, active, name, setName, history, setHistory, initializing, busy, error, setError, load, save, fresh,
+  async function remove(project: OperationSummary) {
+    if (!account) throw new Error('Sign in to delete a project.');
+    setBusy(true);
+    try {
+      const revision = active?.id === project.id ? active.revision : project.revision;
+      await cloudRequest(account, `/${project.id}`, 'DELETE', { expected_revision: revision });
+      setOperations(rows => rows.filter(row => row.id !== project.id));
+      if (active?.id === project.id) fresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return { operations, active, name, setName, history, setHistory, initializing, busy, error, setError, load, save, fresh, remove,
     dirty: (scenario: Scenario) => active
       ? fingerprint({ name: name.trim(), scenario }) !== savedFingerprint
       : !!name.trim() || scenario.needs.length > 0 };

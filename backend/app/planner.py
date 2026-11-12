@@ -9,8 +9,9 @@ from ortools.sat.python import cp_model
 from .models import Allocation, Plan, PlanningRequest, Purchase
 
 
-def validate_plan(request: PlanningRequest, plan: Plan) -> None:
+def validate_plan(request: PlanningRequest, plan: Plan, *, unit_target: int | None = None) -> None:
     """Reject invalid output even if a future solver/model change introduces it."""
+    target = request.target_kits if unit_target is None else unit_target
     offers = {offer.id: offer for offer in request.offers}
     needs = {need.id: need for need in request.needs}
     funds = {fund.id: fund for fund in request.funds}
@@ -40,13 +41,13 @@ def validate_plan(request: PlanningRequest, plan: Plan) -> None:
         bought[offer.need_id] += purchase.quantity
     if any(spending[fund.id] > fund.available_cents for fund in request.funds):
         raise ValueError("Fund overspent.")
-    if not 0 <= plan.complete_kits <= request.target_kits:
+    if plan.target_kits != target or not 0 <= plan.complete_kits <= target:
         raise ValueError("Invalid kit count.")
     for need in request.needs:
         if bought[need.id] != max(0, plan.complete_kits * need.quantity - request.committed.get(need.id, 0)):
             raise ValueError("Plan contains incomplete kits or excess purchases.")
     if plan.unmet != {
-        need.id: max(0, request.target_kits * need.quantity - request.committed.get(need.id, 0) - bought[need.id])
+        need.id: max(0, target * need.quantity - request.committed.get(need.id, 0) - bought[need.id])
         for need in request.needs
     }:
         raise ValueError("Unmet need arithmetic mismatch.")
@@ -54,10 +55,15 @@ def validate_plan(request: PlanningRequest, plan: Plan) -> None:
         raise ValueError("Total arithmetic mismatch.")
 
 
-def solve(request: PlanningRequest, time_limit: float = 3.0) -> Plan:
+def solve(request: PlanningRequest, time_limit: float = 3.0, *, unit_target: int | None = None) -> Plan:
     started = time.perf_counter()
+    target = request.target_kits if unit_target is None else unit_target
+    digest_source = request.model_dump_json()
+    if unit_target is not None:
+        digest_source += f":units:{unit_target}"
+    digest = hashlib.sha256(digest_source.encode()).hexdigest()
     model = cp_model.CpModel()
-    kits = model.new_int_var(0, request.target_kits, "complete_kits")
+    kits = model.new_int_var(0, target, "complete_kits")
     quantities = {}
     allocations = {}
     need_by_id = {need.id: need for need in request.needs}
@@ -72,7 +78,7 @@ def solve(request: PlanningRequest, time_limit: float = 3.0) -> Plan:
         model.add(sum(allocations.get((offer.id, fund.id), 0) for fund in request.funds)
                   == quantities[offer.id] * offer.unit_cost_cents)
     for need in request.needs:
-        remaining = model.new_int_var(0, request.target_kits * need.quantity, f"remaining_{need.id}")
+        remaining = model.new_int_var(0, target * need.quantity, f"remaining_{need.id}")
         model.add_max_equality(remaining, [0, kits * need.quantity - request.committed.get(need.id, 0)])
         model.add(sum(quantities[offer.id] for offer in request.offers if offer.need_id == need.id) == remaining)
     for fund in request.funds:
@@ -90,9 +96,9 @@ def solve(request: PlanningRequest, time_limit: float = 3.0) -> Plan:
     if request.committed:
         notes.append("Kit totals include existing reserved or paid supplies. New purchases cover only remaining needs.")
     if first not in valid:
-        return Plan(id=str(uuid4()), input_digest=hashlib.sha256(request.model_dump_json().encode()).hexdigest(),
-                    status=solver.status_name(first), complete_kits=0, target_kits=request.target_kits,
-                    total_cost_cents=0, purchases=[], unmet={n.id: max(0, n.quantity * request.target_kits - request.committed.get(n.id, 0)) for n in request.needs},
+        return Plan(id=str(uuid4()), input_digest=digest,
+                    status=solver.status_name(first), complete_kits=0, target_kits=target,
+                    total_cost_cents=0, purchases=[], unmet={n.id: max(0, n.quantity * target - request.committed.get(n.id, 0)) for n in request.needs},
                     notes=["No usable result was found within the solver limit. No purchase is proposed."],
                     elapsed_ms=round((time.perf_counter() - started) * 1000))
 
@@ -115,18 +121,19 @@ def solve(request: PlanningRequest, time_limit: float = 3.0) -> Plan:
     status = "OPTIMAL" if first == cp_model.OPTIMAL and second == cp_model.OPTIMAL else "FEASIBLE"
     if status != "OPTIMAL":
         notes.append("A feasible plan is available; the full two-stage optimum was not proven.")
-    if best_kits < request.target_kits:
-        notes.append(f"{request.target_kits - best_kits} kits remain unfulfilled under the current confirmed constraints.")
+    if best_kits < target:
+        label = "kits" if unit_target is None else "units"
+        notes.append(f"{target - best_kits} {label} remain unfulfilled under the current confirmed constraints.")
     purchases = [Purchase(offer_id=o.id, need_id=o.need_id, supplier=o.supplier,
                           quantity=selected_quantities[o.id], cost_cents=selected_quantities[o.id] * o.unit_cost_cents,
                           allocations=[Allocation(fund_id=f.id, amount_cents=selected_allocations[o.id, f.id])
                                        for f in request.funds if selected_allocations.get((o.id, f.id), 0) > 0])
                  for o in request.offers if selected_quantities[o.id] > 0]
-    plan = Plan(id=str(uuid4()), input_digest=hashlib.sha256(request.model_dump_json().encode()).hexdigest(),
-                status=status, complete_kits=best_kits, target_kits=request.target_kits,
+    plan = Plan(id=str(uuid4()), input_digest=digest,
+                status=status, complete_kits=best_kits, target_kits=target,
                 total_cost_cents=sum(p.cost_cents for p in purchases), purchases=purchases,
-                unmet={n.id: max(0, request.target_kits * n.quantity - request.committed.get(n.id, 0) - sum(p.quantity for p in purchases if p.need_id == n.id)) for n in request.needs},
+                unmet={n.id: max(0, target * n.quantity - request.committed.get(n.id, 0) - sum(p.quantity for p in purchases if p.need_id == n.id)) for n in request.needs},
                 notes=notes, elapsed_ms=round((time.perf_counter() - started) * 1000))
-    validate_plan(request, plan)
+    validate_plan(request, plan, unit_target=unit_target)
     return plan
 

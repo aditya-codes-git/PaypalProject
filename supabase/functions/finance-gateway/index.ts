@@ -16,13 +16,16 @@ Deno.serve(async (request: Request) => {
     const bytes = new Uint8Array(length); let offset = 0;
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
     const payload = JSON.parse(new TextDecoder().decode(bytes));
-    if (typeof payload.server_key !== 'string' || payload.server_key.length !== 64 || !['read', 'write', 'lookup', 'ai_budget', 'pending'].includes(payload.command)) {
+    if (typeof payload.server_key !== 'string' || payload.server_key.length !== 64 || !['read', 'write', 'lookup', 'ai_budget', 'pending', 'delete_account'].includes(payload.command)) {
       return Response.json({ code: '42501', message: 'Server credential required' }, { status: 403 });
     }
     const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const response = await fetch(Deno.env.get('SUPABASE_URL') + '/rest/v1/rpc/reliefops_finance_command', {
+    const { command, ...argumentsWithoutCommand } = payload;
+    const deletingAccount = command === 'delete_account';
+    const rpc = deletingAccount ? 'reliefops_delete_account' : 'reliefops_finance_command';
+    const response = await fetch(Deno.env.get('SUPABASE_URL') + '/rest/v1/rpc/' + rpc, {
       method: 'POST', headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload), signal: AbortSignal.timeout(20000),
+      body: JSON.stringify(deletingAccount ? argumentsWithoutCommand : payload), signal: AbortSignal.timeout(20000),
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));

@@ -9,7 +9,7 @@ test('public homepage explains the workflow and opens a blank guest planner', as
   for (const theme of ['dark', 'light']) {
     await page.getByRole('button', { name: `Switch to ${theme} theme` }).click();
     await expect.poll(() => page.evaluate(() => document.getAnimations().some(animation =>
-      animation instanceof CSSAnimation && animation.animationName === 'landing-theme-reveal',
+      animation instanceof CSSAnimation && animation.animationName === 'theme-reveal',
     ))).toBe(true);
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     await expect(page.locator('html')).not.toHaveAttribute('data-theme-reveal', '');

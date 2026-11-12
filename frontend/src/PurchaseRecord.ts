@@ -70,6 +70,9 @@ export function savePurchaseRecord(operation: Operation, ledger: Ledger, statusL
   paragraph(operation.name, 16, true);
   paragraph(`Exported ${date(new Date())} | PayPal sandbox | USD`);
   paragraph(`Operation ID: ${operation.id} | Revision ${operation.revision}`, 10, false, '#5A5871');
+  if (ledger.closeout?.revision === operation.revision && ledger.closeout.version === ledger.version) {
+    paragraph(`Closeout recorded ${date(ledger.closeout.at)}`);
+  }
 
   section('Purchases');
   if (!ledger.purchases.length) paragraph('No approved purchases yet.');
@@ -82,6 +85,12 @@ export function savePurchaseRecord(operation: Operation, ledger: Ledger, statusL
     if (purchase.order_id) paragraph(`PayPal order: ${purchase.order_id}`);
     if (purchase.capture_id) paragraph(`PayPal payment: ${purchase.capture_id}`);
     if (purchase.refund_id) paragraph(`PayPal refund: ${purchase.refund_id}`);
+    if (purchase.replaces_purchase_id) paragraph(`Replaces missing supplies from purchase ${purchase.replaces_purchase_id}`);
+    const evidence = purchase.short_delivery?.evidence;
+    if (evidence?.proposal.quote) {
+      paragraph('Supplier update reviewed for short delivery', 10, true);
+      paragraph(evidence.proposal.quote, 10);
+    }
     for (const allocation of purchase.allocations ?? []) {
       paragraph(`Funding: ${funds.get(allocation.fund_id) ?? allocation.fund_id} | ${amount(allocation.amount_cents)}`);
     }

@@ -35,6 +35,7 @@ class CloudSession:
         self.url, self.key = configuration()
         self.token = token
         self.user_id = ""
+        self.user_email = ""
 
     def request(self, method: str, path: str, **kwargs):
         headers = {"apikey": self.key, "Authorization": f"Bearer {self.token}",
@@ -47,6 +48,12 @@ class CloudSession:
         if response.status_code in (401, 403):
             raise HTTPException(response.status_code, "Your session is invalid or does not permit this action. Sign in again.")
         if response.status_code >= 400:
+            if method == "DELETE" and path == "/rest/v1/operations":
+                try:
+                    if response.json().get("code") == "55000":
+                        raise HTTPException(409, "Resolve pending PayPal transactions in this project's Purchases before deleting it.")
+                except ValueError:
+                    pass
             # Do not reflect provider responses, SQL details, or tokens to the browser.
             raise HTTPException(502, "The database request failed. Check that the ReliefOps schema is installed.")
         try:
@@ -68,6 +75,7 @@ def authenticated(credentials: Annotated[HTTPAuthorizationCredentials | None, De
     user = session.request("GET", "/auth/v1/user")
     try:
         session.user_id = str(UUID(user["id"]))
+        session.user_email = user.get("email") or ""
     except (KeyError, ValueError, TypeError):
         raise HTTPException(401, "Supabase could not verify this user.")
     return session
@@ -124,6 +132,18 @@ def update_operation(operation_id: UUID, draft: OperationUpdate, session: UserSe
     if not rows:
         raise HTTPException(409, "Another tab changed this operation. Reload the saved version before saving again.")
     return rows[0]
+
+
+@router.delete("/{operation_id}")
+def delete_operation(operation_id: UUID, request: RevisionRequest, session: UserSession):
+    session.operation(operation_id)
+    rows = session.request("DELETE", "/rest/v1/operations", params={
+        "id": f"eq.{operation_id}", "owner_id": f"eq.{session.user_id}", "revision": f"eq.{request.expected_revision}",
+        "select": "id",
+    })
+    if not rows:
+        raise HTTPException(409, "This project changed. Reload the workspace before deleting it.")
+    return {"deleted": True}
 
 
 @router.post("/{operation_id}/plans", status_code=201)

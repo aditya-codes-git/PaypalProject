@@ -25,7 +25,7 @@ def database(monkeypatch, scenario):
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test")
     state = {"operation": {"id": OPERATION, "owner_id": USER, "name": "Relief", "scenario": scenario, "revision": 1},
-             "plans": [], "requests": [], "conflict": False}
+             "plans": [], "requests": [], "conflict": False, "pending_payment": False}
 
     def handler(request):
         state["requests"].append(request)
@@ -37,6 +37,13 @@ def database(monkeypatch, scenario):
             if request.method == "GET":
                 requested = request.url.params.get("id")
                 return httpx.Response(200, json=[state["operation"]] if not requested or requested == f"eq.{OPERATION}" else [])
+            if request.method == "DELETE":
+                assert request.url.params["id"] == f"eq.{OPERATION}"
+                assert request.url.params["owner_id"] == f"eq.{USER}"
+                if state["pending_payment"]:
+                    return httpx.Response(400, json={"code": "55000"})
+                rows = [{"id": OPERATION}] if request.url.params["revision"] == f'eq.{state["operation"]["revision"]}' else []
+                return httpx.Response(200, json=rows)
             data = json.loads(request.content)
             if request.method == "POST":
                 assert data["owner_id"] == USER
@@ -106,6 +113,17 @@ def test_operation_can_be_saved_before_funding_is_confirmed(database, scenario):
 def test_inaccessible_operation_returns_not_found(database):
     client = TestClient(app, headers={"Authorization": "Bearer valid"})
     assert client.get("/api/operations/33333333-3333-4333-8333-333333333333").status_code == 404
+
+
+def test_delete_uses_the_current_revision_and_reports_pending_payments(database):
+    client = TestClient(app, headers={"Authorization": "Bearer valid"})
+    url = f"/api/operations/{OPERATION}"
+    assert client.request("DELETE", url, json={"expected_revision": 2}).status_code == 409
+    database["pending_payment"] = True
+    pending = client.request("DELETE", url, json={"expected_revision": 1})
+    assert pending.status_code == 409 and "pending PayPal" in pending.json()["detail"]
+    database["pending_payment"] = False
+    assert client.request("DELETE", url, json={"expected_revision": 1}).json() == {"deleted": True}
 
 
 def test_saved_plan_is_calculated_from_saved_revision(database):

@@ -2,9 +2,10 @@ import { expect, type Page } from '@playwright/test';
 import { fillOperationSetup } from './setup';
 const operationId = '22222222-2222-4222-8222-222222222222';
 const userId = '11111111-1111-4111-8111-111111111111';
-const user = { id: userId, aud: 'authenticated', role: 'authenticated', email: 'coordinator@example.test', created_at: '2026-11-10T00:00:00Z', app_metadata: { provider: 'email', providers: ['email'] }, user_metadata: {}, identities: [] };
-
-export async function mockCloud(page: Page) {
+export async function mockCloud(page: Page, mode: 'manual' | 'default' = 'manual') {
+  const user = { id: userId, aud: 'authenticated', role: 'authenticated', email: 'coordinator@example.test',
+    created_at: '2026-11-10T00:00:00Z', app_metadata: { provider: 'email', providers: ['email'] },
+    user_metadata: mode === 'manual' ? { reliefops_workspace_mode: 'manual' } : {}, identities: [] };
   const state: { operation: any; plans: any[]; conflict: boolean; signoutFailure: boolean } = { operation: null, plans: [], conflict: false, signoutFailure: false };
   const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
   const accessToken = `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ sub: userId, aud: 'authenticated', role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 })}.test-signature`;
@@ -15,6 +16,9 @@ export async function mockCloud(page: Page) {
       const input = route.request().postDataJSON();
       if (input.password !== 'test-password') return route.fulfill({ status: 400, json: { error: 'invalid_grant', error_description: 'Invalid login credentials' } });
       return route.fulfill({ json: { access_token: accessToken, token_type: 'bearer', expires_in: 3600, refresh_token: 'test-refresh-token', user } });
+    }
+    if (route.request().method() === 'PUT' && route.request().url().endsWith('/user')) {
+      user.user_metadata = { ...user.user_metadata, ...route.request().postDataJSON().data };
     }
     return route.fulfill({ json: user });
   });

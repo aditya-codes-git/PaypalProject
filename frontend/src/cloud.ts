@@ -13,11 +13,19 @@ export function fingerprint(value: unknown): string {
 }
 
 export async function cloudRequest<T>(account: Account, path: string, method = 'GET', body?: unknown): Promise<T> {
+  return authenticatedRequest(account, `/api/operations${path}`, method, body);
+}
+
+export async function accountRequest<T>(account: Account, path: string, method = 'GET', body?: unknown): Promise<T> {
+  return authenticatedRequest(account, `/api/account${path}`, method, body);
+}
+
+async function authenticatedRequest<T>(account: Account, path: string, method: string, body: unknown): Promise<T> {
   const { data, error } = await account.client.auth.getSession();
   if (error || !data.session) throw new Error('Your session expired. Sign in again before saving.');
   if (data.session.user.id !== account.session.user.id) throw new Error('The signed-in account changed. Reopen the workspace before saving.');
   // The backend verifies this credential with Supabase; browser session state is not authorization.
-  const response = await fetch(`/api/operations${path}`, {
+  const response = await fetch(path, {
     method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session.access_token}` },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
