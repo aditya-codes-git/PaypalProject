@@ -600,19 +600,32 @@ h1 { font-size: clamp(34px, 3.4vw, 50px); letter-spacing: -.045em; line-height: 
   .app-shell[data-signed-in] .sidebar { transition: width var(--sidebar-motion), padding-inline var(--sidebar-motion); }
   .app-shell[data-signed-in] .main-shell { transition: width var(--sidebar-motion), margin-left var(--sidebar-motion); }
 }
-@media (min-width: 1230px) {
+@media (min-width: 801px) and (min-height: 500px) {
+  main:has(.workspace-layout:not(.has-review) > .assistant-panel) { padding-block: 16px; }
+  .workspace-layout:not(.has-review) > .assistant-panel {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - var(--workspace-header-height) - 32px);
+    padding: clamp(16px, 3dvh, 28px);
+    gap: clamp(10px, 2dvh, 18px);
+  }
+}
+@media (min-width: 1230px) and (min-height: 500px) {
   .has-review .assistant-panel {
     position: sticky;
     top: calc(var(--workspace-header-height) + 16px);
     display: flex;
     flex-direction: column;
-    max-height: calc(100dvh - var(--workspace-header-height) - 32px);
+    max-height: calc(100dvh - var(--workspace-header-height) - 50px);
   }
-  .has-review .assistant-panel > :not(.assistant-transcript) { flex-shrink: 0; }
-  .has-review .assistant-transcript { min-height: 0; }
-  .has-review .assistant-compose textarea { min-height: 68px; height: 68px; resize: none; }
 }
-@media (min-width: 1230px) and (max-height: 760px) {
+/* Let the transcript absorb changes in available height before the controls. */
+.assistant-panel > :not(.assistant-transcript) { flex-shrink: 0; }
+.assistant-transcript { min-height: 0; }
+@media (min-width: 801px) and (min-height: 500px) {
+  .assistant-compose textarea { min-height: 68px; height: 68px; resize: none; }
+}
+@media (min-width: 1230px) and (min-height: 500px) and (max-height: 760px) {
   .has-review .assistant-panel { gap: 10px; padding: 14px; }
   .has-review .assistant-panel > header { gap: 8px; }
   .has-review .assistant-shortcuts { padding-top: 8px; }
