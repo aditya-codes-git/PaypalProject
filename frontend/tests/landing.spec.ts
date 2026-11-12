@@ -5,10 +5,14 @@ test('public homepage explains the workflow and opens a blank guest planner', as
   await mockCloud(page);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Know what to buy. Know who it will reach.');
-  await expect(page.locator('.landing-hero-art')).toHaveCSS('animation-name', 'landing-enter');
-  const photo = page.getByRole('img', { name: /Volunteers packing blankets/ });
-  await expect.poll(() => photo.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Plan what to buy. Know who it reaches.');
+  const kit = page.locator('.landing-kit');
+  await expect(kit).toHaveCSS('animation-name', 'landing-enter');
+  await expect.poll(() => kit.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  const blanket = page.locator('.landing-workflow-art img');
+  await blanket.scrollIntoViewIfNeeded();
+  await expect.poll(() => blanket.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: testInfo.outputPath('landing-desktop.png'), fullPage: true, animations: 'disabled' });
   await page.getByRole('link', { name: 'See an example' }).click();
   const preview = page.locator('.landing-preview');
@@ -26,7 +30,7 @@ test('public homepage explains the workflow and opens a blank guest planner', as
   await expect(page.getByText(/You review the source and confirm the terms/)).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect(page.locator('.landing-hero-art')).toHaveCSS('animation-name', 'none');
+  await expect(kit).toHaveCSS('animation-name', 'none');
   await expect(page.locator('.landing-preview-result')).toHaveCSS('animation-name', 'none');
   await page.getByRole('button', { name: 'Switch to dark theme' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');

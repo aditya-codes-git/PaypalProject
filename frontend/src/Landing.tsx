@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowDown, ArrowRight, Check, ChevronDown, ClipboardList, Clock3, FileCheck2, PackageCheck, ShieldCheck, Truck, Wallet } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUpRight, Check, ChevronDown, ClipboardList, Clock3, FileCheck2, PackageCheck, ShieldCheck, Truck, Wallet } from 'lucide-react';
 import { Brand } from './Brand';
 import { ThemeToggle } from './Theme';
 import './landing.css';
@@ -40,41 +40,42 @@ export function Landing() {
     <a className="landing-skip" href="#landing-content">Skip to content</a>
     <header className="landing-header landing-wrap">
       <a href="/" className="landing-brand"><Brand /></a>
-      <nav aria-label="Main navigation"><a href="#workflow">How it works</a><a href="#example">Example plan</a></nav>
+      <nav aria-label="Main navigation"><a href="#example">Example plan</a><a href="#workflow">How it works</a></nav>
       <div className="landing-nav-actions"><ThemeToggle /><a className="landing-signin" href={workspace}>Sign in</a></div>
     </header>
     <main id="landing-content">
-      <section className="landing-hero landing-wrap" aria-labelledby="landing-title">
+      <section className="landing-hero" aria-labelledby="landing-title">
         <div className="landing-hero-copy">
-          <p className="landing-kicker"><span /> Relief purchasing planner</p>
-          <h1 id="landing-title">Know what to buy. <em>Know who it will reach.</em></h1>
-          <p className="landing-intro">ReliefOps helps relief teams decide which supplies to buy, which grants can pay, and how many households can receive a complete kit by the deadline.</p>
+          <div className="landing-hero-mark"><img src="/brand/reliefops-mark.png" alt="" width="38" height="38" /></div>
+          <h1 id="landing-title">Plan what to buy. <em>Know who it reaches.</em></h1>
+          <p className="landing-intro">Turn supplier quotes and grant rules into a relief purchasing plan. See how many households you can supply by the deadline.</p>
           <div className="landing-actions">
-            <a className="landing-primary" href={guest}>Try the planner <ArrowRight size={18} aria-hidden="true" /></a>
-            <a className="landing-secondary" href="#example">See an example <ArrowDown size={16} aria-hidden="true" /></a>
-          </div>
-          <p className="landing-microcopy">No account needed to build a plan.</p>
-        </div>
-        <div className="landing-hero-art">
-          <img src="/brand/relief-supplies.webp" alt="Volunteers packing blankets and hygiene supplies in a relief warehouse" width="960" height="640" fetchPriority="high" />
-          <div className="landing-hero-card">
-            <span className="landing-card-icon"><PackageCheck size={21} aria-hidden="true" /></span>
-            <div><span>Example plan · Winter shelter</span><strong>12 households covered</strong></div>
-            <span className="landing-ready"><Check size={13} aria-hidden="true" /> On time</span>
+            <a className="landing-primary" href={guest}>Try the planner <ArrowUpRight size={17} aria-hidden="true" /></a>
+            <a className="landing-secondary" href="#example">See an example <ArrowDown size={15} aria-hidden="true" /></a>
           </div>
         </div>
-      </section>
-      <section className="landing-constraints landing-wrap" aria-labelledby="constraints-title">
-        <h2 id="constraints-title">What makes a purchase plan work?</h2>
-        <p className="landing-constraints-intro">The planner tries to cover as many households as possible, then looks for the lowest cost for that coverage.</p>
-        <div>{constraints.map(({ icon: Icon, title, body }) => <article key={title}><span className="landing-card-icon"><Icon size={21} aria-hidden="true" /></span><div><h3>{title}</h3><p>{body}</p></div></article>)}</div>
+        <div className="landing-hero-art" aria-hidden="true">
+          <div className="landing-hero-grant">
+            <FileCheck2 size={22} /><strong>Shelter fund</strong><span>Approved spending</span><p>Blankets only</p>
+          </div>
+          <img className="landing-kit" src="/brand/relief-kit-cutout.webp" alt="" width="720" height="720" fetchPriority="high" />
+          <div className="landing-hero-stock">
+            <div><Truck size={16} /> Summit Textiles</div><strong>12 blankets</strong><span>In stock · Arrives in 2 days</span>
+          </div>
+          <div className="landing-hero-plan">
+            <span><PackageCheck size={16} /> Winter shelter</span>
+            <strong>12<small>/12</small></strong><p>Households covered</p>
+            <div><Check size={14} /> Within budget <Check size={14} /> On time</div>
+          </div>
+        </div>
+        <p className="landing-hero-caption">Winter shelter · Illustrative plan</p>
       </section>
       <section className="landing-example" id="example" aria-labelledby="example-title">
         <div className="landing-wrap landing-example-inner">
           <div className="landing-example-copy">
-            <p className="landing-kicker"><span /> Example plan</p>
-            <h2 id="example-title">See what changes before you buy.</h2>
-            <p>A winter shelter needs blankets and hygiene kits for 12 households within two days. Pick a scenario to see what ReliefOps would buy, how it would pay, and why.</p>
+            <p className="landing-kicker"><span /> Interactive example</p>
+            <h2 id="example-title">Test a plan before you buy.</h2>
+            <p>A winter shelter needs blankets and hygiene kits for 12 households within two days. Change a condition to see what you can still buy.</p>
             <div className="landing-example-options" role="group" aria-label="Example conditions">
               {examples.map((item, index) => <button key={item.label} type="button" aria-pressed={example === index} onClick={() => setExample(index)}>{item.label}<ArrowRight size={16} aria-hidden="true" /></button>)}
             </div>
@@ -93,8 +94,17 @@ export function Landing() {
         </div>
       </section>
       <section className="landing-workflow landing-wrap" id="workflow" aria-labelledby="workflow-title">
-        <h2 id="workflow-title">From urgent needs to delivery records.</h2>
-        <div className="landing-steps">{steps.map(({ icon: Icon, title, body }) => <article key={title}><span className="landing-card-icon"><Icon size={22} aria-hidden="true" /></span><h3>{title}</h3><p>{body}</p></article>)}</div>
+        <div className="landing-workflow-art">
+          <div>
+            <h2 id="workflow-title">From grant rules to relief kits.</h2>
+            <p>ReliefOps looks for the most complete kits you can deliver by the deadline, then the lowest cost at that coverage.</p>
+          </div>
+          <img src="/brand/relief-blanket-cutout.webp" alt="" width="1000" height="667" loading="lazy" />
+        </div>
+        <div className="landing-workflow-body">
+          <div className="landing-constraints">{constraints.map(({ icon: Icon, title, body }) => <article key={title}><span className="landing-card-icon"><Icon size={19} aria-hidden="true" /></span><div><h3>{title}</h3><p>{body}</p></div></article>)}</div>
+          <ol className="landing-steps">{steps.map(({ icon: Icon, title, body }) => <li key={title}><Icon size={19} aria-hidden="true" /><div><h3>{title}</h3><p>{body}</p></div></li>)}</ol>
+        </div>
       </section>
       <section className="landing-questions landing-wrap" aria-labelledby="questions-title">
         <h2 id="questions-title">Good to know before you start.</h2>
