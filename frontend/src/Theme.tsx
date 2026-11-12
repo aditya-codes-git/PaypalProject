@@ -17,7 +17,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#09090b' : '#ffffff');
-    try { localStorage.setItem('reliefops-theme', theme); } catch { /* Theme still works for this session. */ }
   }, [theme]);
   return <ThemeContext.Provider value={{ theme, toggle: () => setTheme(value => value === 'dark' ? 'light' : 'dark') }}>{children}</ThemeContext.Provider>;
 }
@@ -31,6 +30,8 @@ export function ThemeToggle({ animate = false }: { animate?: boolean }) {
 
   function switchTheme(event: MouseEvent<HTMLButtonElement>) {
     if (transitioning.current) return;
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem('reliefops-theme', nextTheme); } catch { /* Theme still works for this session. */ }
     if (!animate || !document.startViewTransition || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       toggle();
       return;
