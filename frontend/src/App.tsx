@@ -106,6 +106,12 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
   const showFundingHelp = !settingUp && !canPlan;
   const assistantMode = !!account && mode === 'assistant';
   const assistantDetail = assistantView === 'review';
+  useEffect(() => {
+    const pane = assistantDetailRegion.current;
+    if (!pane || pane.hidden || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const animation = pane.animate([{ opacity: 0.5 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
+    return () => animation.cancel();
+  }, [tab, assistantDetail]);
   const dialogOpen = drawer || showSetup || showProfile;
   const navigationExpanded = mobileLayout ? mobileSidebarOpen : !sidebarCollapsed;
 
@@ -463,7 +469,7 @@ export function App({ account = null, onExit = () => {} }: { account?: Account |
         {assistantMode && !assistantDetail && !workspace.initializing && error && <p className="error-banner" role="alert">{error}</p>}
         {(!assistantMode || assistantView !== 'chat' || workspace.initializing) && <div className={assistantMode ? 'assistant-detail' : undefined}
           hidden={assistantMode && !assistantDetail && !workspace.initializing}
-          ref={assistantMode ? assistantDetailRegion : undefined} tabIndex={assistantMode ? -1 : undefined}>
+          ref={assistantDetailRegion} tabIndex={assistantMode ? -1 : undefined}>
         {assistantMode && assistantDetail && <button className="text-button assistant-return" onClick={focusChat}>
           <Icon name="chat" size={16} /> Back to chat
         </button>}

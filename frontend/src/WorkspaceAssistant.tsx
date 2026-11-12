@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronUp } from 'lucide-react';
+import { flushSync } from 'react-dom';
 import { cloudRequest, type Account, type Operation } from './cloud';
 import { emptyScenario, type Need, type Offer, type Scenario } from './types';
 import type { SupplierAnalysis } from './Fulfillment';
@@ -115,15 +116,27 @@ export function WorkspaceAssistant({ account, operation, threads, busy, quickAct
     }
   }
 
-  return <section className="assistant-panel card" aria-label="Ask ReliefOps" id="workspace-assistant">
-    <header><div className="assistant-title"><span className="assistant-mark"><Icon name="chat" size={22} /></span>
+  return <section className="assistant-panel card" data-collapsed={collapsed || undefined} aria-label="Ask ReliefOps" id="workspace-assistant">
+    <header><div className={collapsed ? 'sr-only' : 'assistant-title'}><span className="assistant-mark"><Icon name="chat" size={22} /></span>
       <div><h1 id="workspace-chat-heading" tabIndex={-1} onFocus={() => setCollapsed(false)}>Ask ReliefOps</h1><p>{operation ? operation.name : 'What does your relief team need?'}</p></div></div>
       <div className="assistant-header-actions">
         {!collapsed && <button className="button subtle" onClick={onOpenEditor} disabled={busy}>{operation ? 'Edit operation' : 'Open setup form'}</button>}
         <button className="icon-button" type="button" aria-expanded={!collapsed} aria-controls="workspace-chat-content"
           aria-label={collapsed ? 'Expand chat' : 'Collapse chat'} title={collapsed ? 'Expand chat' : 'Collapse chat'}
-          onClick={() => setCollapsed(value => !value)}>
-          {collapsed ? <ChevronDown size={18} aria-hidden="true" /> : <ChevronUp size={18} aria-hidden="true" />}
+          onClick={() => {
+            const toggle = () => setCollapsed(!collapsed);
+            if (!document.startViewTransition || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+              toggle();
+              return;
+            }
+            const root = document.documentElement;
+            root.dataset.chatTransition = '';
+            const transition = document.startViewTransition(() => flushSync(toggle));
+            const cleanUp = () => { delete root.dataset.chatTransition; };
+            void transition.ready.catch(() => {});
+            void transition.finished.then(cleanUp, cleanUp);
+          }}>
+          {collapsed ? <Icon name="chat" size={20} /> : <ChevronUp size={18} aria-hidden="true" />}
         </button>
       </div>
     </header>

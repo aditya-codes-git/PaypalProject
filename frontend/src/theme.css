@@ -506,6 +506,23 @@ h1 { font-size: clamp(34px, 3.4vw, 50px); letter-spacing: -.045em; line-height: 
 .assistant-header-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .assistant-content:not([hidden]) { display: contents; }
 .assistant-content[hidden] { display: none; }
+.workspace-layout .assistant-panel[data-collapsed] {
+  width: max-content;
+  margin-inline: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.assistant-panel[data-collapsed] .icon-button { color: var(--accent-text); }
+.workspace-layout:has(> .assistant-panel[data-collapsed]) { grid-template-columns: auto minmax(0, 1fr); }
+:root[data-chat-transition] .assistant-panel { view-transition-name: workspace-chat; }
+:root[data-chat-transition] .has-review .assistant-detail { view-transition-name: workspace-review; }
+::view-transition-group(workspace-chat),
+::view-transition-group(workspace-review) {
+  animation-duration: 240ms;
+  animation-timing-function: cubic-bezier(.25, .8, .25, 1);
+}
 .assistant-title { display: flex; gap: 13px; align-items: center; min-width: 0; }
 .assistant-mark { display: grid; place-items: center; width: 46px; height: 46px; flex: 0 0 46px; border-radius: 13px; background: var(--accent-soft); color: var(--accent-text); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); }
 .assistant-panel h1 { font-size: clamp(28px, 3.5vw, 42px); margin-bottom: 4px; }
@@ -556,10 +573,6 @@ h1 { font-size: clamp(34px, 3.4vw, 50px); letter-spacing: -.045em; line-height: 
   .assistant-nav { margin: 0; }
   .assistant-panel { gap: 15px; }
   .assistant-mark { width: 39px; height: 39px; flex-basis: 39px; }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .assistant-detail { animation: assistant-review-in .2s ease-out both; }
-  @keyframes assistant-review-in { from { opacity: .65; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 }
 .profile-form { margin-top: 16px; }
 .profile-form fieldset { display: grid; gap: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
