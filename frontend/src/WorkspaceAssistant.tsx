@@ -93,6 +93,7 @@ export function WorkspaceAssistant({ account, operation, threads, busy, quickAct
     if (!source || waiting || busy) return;
     setWaiting(true);
     setPendingMessage(source);
+    setInput('');
     setError('');
     const messages: { role: 'user' | 'assistant'; text: string }[] = [{ role: 'user', text: source }];
     let total = source.length;
@@ -108,9 +109,11 @@ export function WorkspaceAssistant({ account, operation, threads, busy, quickAct
       threads.set(key, next);
       saveAssistantThreads(account.session.user.id, threads);
       setTurns(next);
-      setInput('');
     } catch (err) {
-      if (live.current) setError(err instanceof Error ? err.message : 'Could not reach the assistant. Try again or open the form.');
+      if (live.current) {
+        setInput(input);
+        setError(err instanceof Error ? err.message : 'Could not reach the assistant. Try again or open the form.');
+      }
     } finally {
       if (live.current) { setWaiting(false); setPendingMessage(''); }
     }
